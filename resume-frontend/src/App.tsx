@@ -9,7 +9,7 @@ function App() {
   const [score, setScore] = useState<number | null>(null);
   const [skills, setSkills] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
-
+  const [showAllSkills, setShowAllSkills] = useState(false);
 
   const uploadResume = async () => {
 
@@ -20,7 +20,7 @@ function App() {
 
     try {
 
-      setLoading(true);   
+      setLoading(true);
 
       const formData = new FormData();
       formData.append("file", file);
@@ -34,12 +34,12 @@ function App() {
       setSkills(res.data.skills_found);
       setSuggestions(res.data.suggestions);
 
-      setLoading(false);   
+      setLoading(false);
 
     } catch (error) {
       console.error(error);
       alert("Upload failed");
-      setLoading(false);   
+      setLoading(false);
     }
 
   };
@@ -101,21 +101,50 @@ function App() {
             </div>
 
             {/* SKILLS */}
-
             <div className="mt-4">
-
-              <h4>Skills Found</h4>
+              <h4>Skills Found ({skills.length})</h4>
 
               {skills.length === 0 && <p>No skills detected</p>}
 
-              {skills.map((skill: string, i: number) => (
-                <span key={i} className="skill-badge">
-                  {skill}
-                </span>
-              ))}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", justifyContent: "center" }}>
+                {(showAllSkills ? skills : skills.slice(0, 15)).map((skill: string, i: number) => (
+                  <span key={i} className="skill-badge">
+                    {skill}
+                  </span>
+                ))}
+              </div>
+
+              {/* Acceptance Criteria: Show toggle button only if list exceeds 15 */}
+              {skills.length > 15 && (
+                <button
+                  onClick={() => setShowAllSkills(!showAllSkills)}
+                  style={{
+                    marginTop: "16px",
+                    background: "rgba(255, 255, 255, 0.15)",
+                    color: "#ffffff",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                    padding: "6px 16px",
+                    borderRadius: "20px",
+                    cursor: "pointer",
+                    fontWeight: "600",
+                    fontSize: "13px",
+                    transition: "all 0.2s ease",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px"
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "rgba(255, 255, 255, 0.25)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "rgba(255, 255, 255, 0.15)";
+                  }}
+                >
+                  {showAllSkills ? "Show Less ▲" : `Show More (${skills.length - 15} more) ▼`}
+                </button>
+              )}
 
             </div>
-
             {/* SUGGESTIONS */}
 
             <div className="suggestion-box">
