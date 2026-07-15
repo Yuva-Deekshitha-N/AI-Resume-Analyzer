@@ -99,18 +99,42 @@ function App() {
       formData.append("file", fileToAnalyze);
       formData.append("role", targetRole);
 
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000";
       const headers = user ? { Authorization: `Bearer ${user.token}` } : {};
       const res = await axios.post(`${backendUrl}/api/upload/`, formData, { headers });
 
-      setScore(res.data.score);
-      setSkills(res.data.skills_found);
-      setSuggestions(res.data.suggestions);
-      setMatchedSkills(res.data.matched_skills || []);
-      setMissingSkills(res.data.missing_skills || []);
-      setLoading(false);
-    } catch (error) {
+      const taskId = res.data.task_id;
+      
+      // Start polling
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusRes = await axios.get(`${backendUrl}/api/task-status/${taskId}/`);
+          if (statusRes.data.status === 'SUCCESS') {
+            clearInterval(pollInterval);
+            setScore(statusRes.data.result.score);
+            setSkills(statusRes.data.result.skills_found);
+            setSuggestions(statusRes.data.result.suggestions);
+            setMatchedSkills(statusRes.data.result.matched_skills || []);
+            setMissingSkills(statusRes.data.result.missing_skills || []);
+            setLoading(false);
+          } else if (statusRes.data.status === 'FAILURE') {
+            clearInterval(pollInterval);
+            console.error(statusRes.data.error);
+            alert("Analysis failed.");
+            setLoading(false);
+          }
+        } catch (pollErr) {
+          clearInterval(pollInterval);
+          console.error(pollErr);
+          alert("Error checking task status.");
+          setLoading(false);
+        }
+      }, 2000);
+
+    } catch (error: any) {
       console.error(error);
-      alert(source === "sample" ? "Sample analysis failed" : "Upload failed");
+      const errorMsg = error.response?.data?.error || error.message || "Unknown error";
+      alert(source === "sample" ? `Sample analysis failed: ${errorMsg}` : `Upload failed: ${errorMsg}`);
       setLoading(false);
     }
   };
@@ -149,6 +173,30 @@ function App() {
       console.error(error);
       alert("Could not load sample resume");
       setLoading(false);
+      setActiveFileName(file.name);
+
+      // Save to localStorage only for anonymous users (authenticated saves to DB)
+      if (!user) {
+        addEntry({
+          score: res.data.score,
+          skills: res.data.skills_found,
+          suggestions: res.data.suggestions,
+          matchedSkills: res.data.matched_skills || [],
+          missingSkills: res.data.missing_skills || [],
+          targetRole,
+          fileName: file.name,
+        });
+      } else {
+        // Refresh DB history to include the new entry
+        fetchDbHistory(user.token);
+      }
+
+      setLoading(false);   
+    } catch (error) {
+      console.error("Upload failed:", error instanceof Error ? error.message : "Unknown error");
+      alert("Upload failed");
+      setLoading(false);   
+>>>>>>> upstream/main
     }
   };
 
@@ -203,6 +251,82 @@ function App() {
       <div className="container mt-5">
         <div className="main-card text-center">
           <button
+      <div className="main-card text-center">
+        <button
+          type="button"
+          className="app-btn theme-toggle-btn"
+          onClick={toggleTheme}
+          aria-label="Toggle theme"
+          aria-pressed={theme === "dark"}
+        >
+          {theme === "light" ? "🌙 Dark Mode" : "☀️ Light Mode"}
+        </button>
+
+        {/* Auth bar */}
+        <div className="auth-bar">
+          {user ? (
+            <>
+              <span className="auth-username">👤 {user.username}</span>
+              <button className="auth-bar-btn" onClick={logout}>Logout</button>
+            </>
+          ) : (
+            <button className="auth-bar-btn" onClick={() => setShowAuthModal(true)}>🔐 Login / Sign Up</button>
+          )}
+        </div>
+
+        {showAuthModal && (
+          <AuthModal
+            onSignup={signup}
+            onLogin={login}
+            onClose={() => setShowAuthModal(false)}
+          />
+        )}
+
+        <h1 className="mb-4">🚀 AI Resume Analyzer</h1>
+
+        {/* Role Selector Dropdown */}
+        <div className="mb-4">
+          <label htmlFor="roleSelect" style={{ marginRight: "10px", fontWeight: "600", color: "#fff" }}>
+            Target Career Track:
+          </label>
+          <select
+            id="roleSelect"
+            value={targetRole}
+            onChange={(e) => setTargetRole(e.target.value)}
+            style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #ccc" }}
+          >
+            <option value="Frontend Developer">Frontend Developer</option>
+            <option value="Backend Developer">Backend Developer</option>
+            <option value="Data Analyst">Data Analyst</option>
+          </select>
+        </div>
+
+        <div className="upload-box mb-3">
+          <input
+            type="file"
+            id="fileUpload"
+            hidden
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+              if (e.target.files) setFile(e.target.files[0]);
+            }}
+          />
+          <label htmlFor="fileUpload" className="upload-label">
+            📄 {file ? file.name : "Drag & Drop Resume or Click to Upload"}
+          </label>
+        </div>
+
+        <div style={{ display: "flex", gap: "12px", justifyContent: "center", alignItems: "center" }} className="mb-3">
+          <button 
+            className="analyze-btn" 
+            onClick={uploadResume}
+            disabled={loading}
+          >
+            {loading && analysisSource === "upload" ? "⏳ Extracting and analyzing resume text..." : "🚀 Analyze Resume"}
+          </button>
+          <button 
+            className="secondary-btn" 
+            onClick={handleSampleResume}
+            disabled={loading}
             type="button"
             className="app-btn theme-toggle-btn"
             onClick={toggleTheme}
@@ -211,6 +335,7 @@ function App() {
           >
             {theme === "light" ? "🌙 Dark Mode" : "☀️ Light Mode"}
           </button>
+        </div>
 
           {/* Auth bar */}
           <div className="auth-bar">
