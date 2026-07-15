@@ -322,3 +322,118 @@ margin:15px auto;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ── Auth Bar ───────────────────────────── */
+
+.auth-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.auth-username {
+  font-size: 14px;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.auth-bar-btn {
+  background: rgba(255,255,255,0.15);
+  color: var(--card-text);
+  border: 1px solid rgba(255,255,255,0.3);
+  padding: 5px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.2s ease;
+}
+
+.auth-bar-btn:hover {
+  background: rgba(255,255,255,0.25);
+}
+
+/* ── Auth Modal ─────────────────────────── */
+
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.auth-modal {
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 16px;
+  padding: 32px 28px;
+  width: 320px;
+  color: var(--card-text);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+}
+
+.auth-modal h3 {
+  margin: 0 0 20px;
+  text-align: center;
+}
+
+.auth-input {
+  display: block;
+  width: 100%;
+  padding: 9px 12px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.1);
+  color: var(--card-text);
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.auth-input::placeholder { opacity: 0.6; }
+
+.auth-error {
+  color: #f87171;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.auth-submit-btn {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  background: var(--score-accent);
+  color: #000;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.auth-submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.auth-switch {
+  text-align: center;
+  font-size: 13px;
+  margin-top: 14px;
+  margin-bottom: 0;
+  opacity: 0.8;
+}
+
+.auth-switch-btn {
+  background: none;
+  border: none;
+  color: var(--score-accent);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 0;
+  text-decoration: underline;
+}
