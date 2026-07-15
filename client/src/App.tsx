@@ -1,9 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import "./index.css";
 import { AtsScore } from "./AtsScore";
 import { useAnalysisHistory, type AnalysisEntry } from "./hooks/useAnalysisHistory";
 import { HistorySidebar } from "./HistorySidebar";
+import { useAuth } from "./hooks/useAuth";
+import { AuthModal } from "./AuthModal";
 
 type Theme = "light" | "dark";
 
@@ -35,10 +37,44 @@ function App() {
   const [showAllSkills, setShowAllSkills] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // Auth
+  const { user, signup, login, logout } = useAuth();
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
   // History
-  const { entries, addEntry, deleteEntry, clearHistory } = useAnalysisHistory();
+  const { entries, addEntry, deleteEntry, clearHistory, setEntries } = useAnalysisHistory();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [activeFileName, setActiveFileName] = useState("");
+
+  const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000";
+
+  const fetchDbHistory = useCallback(async (token: string) => {
+    try {
+      const res = await axios.get(`${backendUrl}/api/history/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const dbEntries: AnalysisEntry[] = res.data.map((item: {
+        id: number; file_name: string; score: number; skills_found: string[];
+        suggestions: string[]; matched_skills: string[]; missing_skills: string[];
+        target_role: string; created_at: string;
+      }) => ({
+        id: String(item.id),
+        timestamp: new Date(item.created_at).getTime(),
+        score: item.score,
+        skills: item.skills_found,
+        suggestions: item.suggestions,
+        matchedSkills: item.matched_skills,
+        missingSkills: item.missing_skills,
+        targetRole: item.target_role,
+        fileName: item.file_name,
+      }));
+      setEntries(dbEntries);
+    } catch { /* silently ignore */ }
+  }, [backendUrl, setEntries]);
+
+  useEffect(() => {
+    if (user) fetchDbHistory(user.token);
+  }, [user, fetchDbHistory]);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -65,11 +101,8 @@ function App() {
       formData.append("file", file);
       formData.append("role", targetRole);
 
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000";
-      const res = await axios.post(
-        `${backendUrl}/api/upload/`,
-        formData
-      );
+      const headers = user ? { Authorization: `Bearer ${user.token}` } : {};
+      const res = await axios.post(`${backendUrl}/api/upload/`, formData, { headers });
 
       setScore(res.data.score);
       setSkills(res.data.skills_found);
@@ -78,16 +111,21 @@ function App() {
       setMissingSkills(res.data.missing_skills || []);
       setActiveFileName(file.name);
 
-      // Save to history
-      addEntry({
-        score: res.data.score,
-        skills: res.data.skills_found,
-        suggestions: res.data.suggestions,
-        matchedSkills: res.data.matched_skills || [],
-        missingSkills: res.data.missing_skills || [],
-        targetRole,
-        fileName: file.name,
-      });
+      // Save to localStorage only for anonymous users (authenticated saves to DB)
+      if (!user) {
+        addEntry({
+          score: res.data.score,
+          skills: res.data.skills_found,
+          suggestions: res.data.suggestions,
+          matchedSkills: res.data.matched_skills || [],
+          missingSkills: res.data.missing_skills || [],
+          targetRole,
+          fileName: file.name,
+        });
+      } else {
+        // Refresh DB history to include the new entry
+        fetchDbHistory(user.token);
+      }
 
       setLoading(false);   
     } catch (error) {
@@ -142,6 +180,26 @@ function App() {
         >
           {theme === "light" ? "🌙 Dark Mode" : "☀️ Light Mode"}
         </button>
+
+        {/* Auth bar */}
+        <div className="auth-bar">
+          {user ? (
+            <>
+              <span className="auth-username">👤 {user.username}</span>
+              <button className="auth-bar-btn" onClick={logout}>Logout</button>
+            </>
+          ) : (
+            <button className="auth-bar-btn" onClick={() => setShowAuthModal(true)}>🔐 Login / Sign Up</button>
+          )}
+        </div>
+
+        {showAuthModal && (
+          <AuthModal
+            onSignup={signup}
+            onLogin={login}
+            onClose={() => setShowAuthModal(false)}
+          />
+        )}
 
         <h1 className="mb-4">🚀 AI Resume Analyzer</h1>
 

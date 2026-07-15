@@ -63,5 +63,5 @@ export function useAnalysisHistory() {
     setEntries([]);
   }, []);
 
-  return { entries, addEntry, deleteEntry, clearHistory };
+  return { entries, addEntry, deleteEntry, clearHistory, setEntries };
 }

@@ -1,29 +1,45 @@
-from rest_framework.decorators import api_view, parser_classes
+from rest_framework.decorators import api_view, parser_classes, permission_classes
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
+from rest_framework import status
 import pdfplumber
 
+from .models import ResumeAnalysis
+from .serializers import SignupSerializer, ResumeAnalysisSerializer
+
 skills_list = [
-    "python","django","react","javascript","sql",
-    "html","css","git","github","flask",
-    "machine learning","data analysis",
-    "excel","microsoft office","ms office",
-    "c","c++","java"
+    "python", "django", "react", "javascript", "sql",
+    "html", "css", "git", "github", "flask",
+    "machine learning", "data analysis",
+    "excel", "microsoft office", "ms office",
+    "c", "c++", "java"
 ]
 
-# Acceptance Criteria: Predefined skill sets for at least 3 roles
 ROLE_SKILL_MATRICES = {
     "Frontend Developer": ["html", "css", "javascript", "react", "git", "github"],
     "Backend Developer": ["python", "django", "flask", "sql", "git", "github"],
     "Data Analyst": ["python", "excel", "sql", "data analysis", "machine learning"]
 }
 
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def signup(request):
+    serializer = SignupSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save()
+        return Response({"detail": "Account created."}, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
 @api_view(["POST"])
 @parser_classes([MultiPartParser, FormParser])
+@permission_classes([AllowAny])
 def upload_resume(request):
     file = request.FILES.get("file")
-    # Acceptance Criteria: Endpoint accepts a target role parameter
     target_role = request.data.get("role", None)
+    file_name = file.name if file else "unknown"
 
     text = ""
     with pdfplumber.open(file) as pdf:
@@ -33,16 +49,9 @@ def upload_resume(request):
                 text += page_text
 
     text = text.lower()
-    print(text)   # debug
 
-    detected_skills = []
-    for skill in skills_list:
-        if skill.lower() in text:
-            detected_skills.append(skill)
-
-    score = len(detected_skills) * 10
-    if score > 100:
-        score = 100
+    detected_skills = [s for s in skills_list if s.lower() in text]
+    score = min(len(detected_skills) * 10, 100)
 
     suggestions = []
     if "python" not in detected_skills:
@@ -52,18 +61,23 @@ def upload_resume(request):
     if "react" not in detected_skills:
         suggestions.append("Add frontend skills like React")
 
-
-    # --- NEW SKILL GAP ANALYSIS LOGIC ---
-    matched_skills = []
-    missing_skills = []
-
+    matched_skills, missing_skills = [], []
     if target_role in ROLE_SKILL_MATRICES:
-        required_skills = ROLE_SKILL_MATRICES[target_role]
-        for skill in required_skills:
-            if skill in detected_skills:
-                matched_skills.append(skill)
-            else:
-                missing_skills.append(skill)
+        for skill in ROLE_SKILL_MATRICES[target_role]:
+            (matched_skills if skill in detected_skills else missing_skills).append(skill)
+
+    # Save to DB only for authenticated users
+    if request.user and request.user.is_authenticated:
+        ResumeAnalysis.objects.create(
+            user=request.user,
+            file_name=file_name,
+            score=score,
+            skills_found=detected_skills,
+            suggestions=suggestions,
+            matched_skills=matched_skills,
+            missing_skills=missing_skills,
+            target_role=target_role or "",
+        )
 
     return Response({
         "score": score,
@@ -71,6 +85,13 @@ def upload_resume(request):
         "suggestions": suggestions,
         "target_role": target_role,
         "matched_skills": matched_skills,
-        "missing_skills": missing_skills
+        "missing_skills": missing_skills,
     })
-    
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def analysis_history(request):
+    analyses = ResumeAnalysis.objects.filter(user=request.user)
+    serializer = ResumeAnalysisSerializer(analyses, many=True)
+    return Response(serializer.data)
