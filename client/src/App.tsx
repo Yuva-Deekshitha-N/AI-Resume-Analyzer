@@ -134,7 +134,7 @@ function App() {
           </label>
         </div>
 
-        <button type="button" className="app-btn analyze-btn" onClick={uploadResume}>
+        <button type="button" className="app-btn analyze-btn" onClick={uploadResume} disabled={loading}>
           {loading ? "⏳ Analyzing..." : "🚀 Analyze Resume"}
         </button>
 
