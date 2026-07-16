@@ -8,6 +8,7 @@ import { useAuth } from "./hooks/useAuth";
 import { AuthModal } from "./AuthModal";
 import { Footer } from "./Footer";
 import AnalysisSkeleton from "./components/AnalysisSkeleton/AnalysisSkeleton";
+import { InfoTooltip } from "./components/InfoTooltip";
 
 type Theme = "light" | "dark";
 
@@ -432,7 +433,10 @@ function App() {
 
               {/* Skill gap matrix */}
               <div className="mt-4 p-3" style={{ background: "rgba(255,255,255,0.05)", borderRadius: "8px" }}>
-                <h4>🎯 Skill Gap Matrix ({targetRole})</h4>
+                <h4 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  🎯 Skill Gap Matrix ({targetRole})
+                  <InfoTooltip content="Shows which required skills are already in your resume and which important skills are missing." />
+                </h4>
                 <div style={{ display: "flex", justifyContent: "space-around", marginTop: "12px" }}>
                   <div>
                     <h6 style={{ color: "#22c55e" }}>Matched Skills</h6>
