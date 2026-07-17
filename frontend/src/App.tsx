@@ -304,6 +304,9 @@ function App() {
 
       <div className="container mt-5">
         <div className="main-card text-center">
+      <div className="container mt-5 px-3"> {/* Added padding safety track */}
+        <div className="main-card text-center mx-auto" style={{ width: "100%", maxWidth: "600px" }}>
+          {/* Theme toggle */}
           <button
             type="button"
             className="app-btn theme-toggle-btn"
@@ -333,17 +336,20 @@ function App() {
             />
           )}
 
-          <h1 className="mb-4">🚀 AI Resume Analyzer</h1>
+          <h1 className="mb-4" style={{ fontSize: "calc(1.5rem + 1.5vw)", wordBreak: "break-word" }}>🚀 AI Resume Analyzer</h1>
 
           <div className="mb-4">
             <label htmlFor="roleSelect" style={{ marginRight: "10px", fontWeight: "600", color: "#fff" }}>
+          {/* Role Selector Dropdown */}
+          <div className="mb-4 d-flex flex-column align-items-center flex-sm-row justify-content-center" style={{ gap: "8px" }}>
+            <label htmlFor="roleSelect" style={{ fontWeight: "600", color: "#fff" }}>
               Target Career Track:
             </label>
             <select
               id="roleSelect"
               value={targetRole}
               onChange={(e) => setTargetRole(e.target.value)}
-              style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #ccc" }}
+              style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #ccc", width: "100%", maxWidth: "250px" }}
             >
               <option value="Frontend Developer">Frontend Developer</option>
               <option value="Backend Developer">Backend Developer</option>
@@ -351,7 +357,7 @@ function App() {
             </select>
           </div>
 
-          <div className="upload-box mb-3">
+          <div className="upload-box mb-3" style={{ width: "100%", maxWidth: "100%" }}>
             <input
               type="file"
               id="fileUpload"
@@ -360,10 +366,11 @@ function App() {
                 if (e.target.files) setFile(e.target.files[0]);
               }}
             />
-            <label htmlFor="fileUpload" className="upload-label">
+            <label htmlFor="fileUpload" className="upload-label" style={{ display: "block", wordBreak: "break-all", padding: "15px" }}>
               📄 {file ? file.name : "Drag & Drop Resume or Click to Upload"}
             </label>
           </div>
+
 
           <div style={{ display: "flex", gap: "12px", justifyContent: "center", alignItems: "center" }} className="mb-3">
             <button className="analyze-btn" onClick={uploadResume} disabled={loading}>
@@ -371,6 +378,25 @@ function App() {
             </button>
             <button className="secondary-btn" onClick={handleSampleResume} disabled={loading} type="button">
               {loading && analysisSource === "sample" ? "⏳ Loading Sample..." : "Try Sample Resume"}
+
+          {/* FIXED: Added responsive flex-wrap and set width boundaries for smaller screens */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", justifyContent: "center", alignItems: "center" }} className="mb-3">
+            <button
+              className="analyze-btn"
+              onClick={uploadResume}
+              disabled={loading}
+              style={{ minHeight: "44px", flex: "1 1 200px", maxWidth: "100%" }}
+            >
+              {loading && analysisSource === "upload" ? "⏳ Extracting..." : "🚀 Analyze Resume"}
+            </button>
+            <button
+              className="secondary-btn"
+              onClick={handleSampleResume}
+              disabled={loading}
+              type="button"
+              style={{ minHeight: "44px", flex: "1 1 200px", maxWidth: "100%" }}
+            >
+              {loading && analysisSource === "sample" ? "⏳ Loading..." : "Try Sample Resume"}
             </button>
           </div>
 
@@ -379,9 +405,9 @@ function App() {
           {score !== null && (
             <>
               {analysisSource === "sample" && (
-                <div className="sample-notice-banner mb-4">
+                <div className="sample-notice-banner mb-4" style={{ padding: "10px", wordBreak: "break-word" }}>
                   <span>ℹ️ Viewing Sample Resume Analysis</span>
-                  <span style={{ fontWeight: "normal", fontSize: "13px" }}>
+                  <span style={{ fontWeight: "normal", fontSize: "13px", display: "block" }}>
                     — This analysis is based on a bundled sample resume.
                   </span>
                 </div>
@@ -390,9 +416,9 @@ function App() {
               <AtsScore score={score} />
               <ResumePreview text={resumeText} skills={skills} />
 
-              <h5 className="analysis-done">✅ Resume Analysis Complete</h5>
+              <h5 className="analysis-done mt-3">✅ Resume Analysis Complete</h5>
               {activeFileName && (
-                <p style={{ fontSize: "13px", opacity: 0.7, marginTop: "-8px" }}>📄 {activeFileName}</p>
+                <p style={{ fontSize: "13px", opacity: 0.7, marginTop: "-8px", wordBreak: "break-all" }}>📄 {activeFileName}</p>
               )}
 
               {/* NEW RENDER COMPONENT: WORK EXPERIENCE SECTION */}
@@ -435,14 +461,14 @@ function App() {
                 {skills.length === 0 && <p>No skills detected</p>}
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", justifyContent: "center" }}>
                   {(showAllSkills ? skills : skills.slice(0, 15)).map((skill: string, i: number) => (
-                    <span key={i} className="skill-badge">{skill}</span>
+                    <span key={i} className="skill-badge" style={{ wordBreak: "break-word" }}>{skill}</span>
                   ))}
                 </div>
                 {skills.length > 15 && (
                   <button
                     type="button"
                     className="app-btn app-btn--secondary"
-                    style={{ marginTop: "16px" }}
+                    style={{ marginTop: "16px", minHeight: "44px" }}
                     onClick={() => setShowAllSkills(!showAllSkills)}
                   >
                     {showAllSkills ? "Show Less ▲" : `Show More (${skills.length - 15} more) ▼`}
@@ -450,24 +476,32 @@ function App() {
                 )}
               </div>
 
-              {/* Skill gap matrix */}
+              {/* FIXED: Changed matrix container style to use flex-wrap / grid adaptation for mobile widths */}
               <div className="mt-4 p-3" style={{ background: "rgba(255,255,255,0.05)", borderRadius: "8px" }}>
-                <h4 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  🎯 Skill Gap Matrix ({targetRole})
+                <h4 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', textAlign: 'center' }}>
+                  <span>🎯 Skill Gap Matrix ({targetRole})</span>
                   <InfoTooltip content="Shows which required skills are already in your resume and which important skills are missing." />
                 </h4>
-                <div style={{ display: "flex", justifyContent: "space-around", marginTop: "12px" }}>
-                  <div>
+                <div className="skill-gap-layout" style={{ display: "flex", flexWrap: "wrap", gap: "20px", justifyContent: "space-around", marginTop: "12px" }}>
+                  <div style={{ flex: "1 1 140px", minWidth: "140px" }}>
                     <h6 style={{ color: "#22c55e" }}>Matched Skills</h6>
-                    {matchedSkills.length === 0 ? <p style={{ fontSize: "12px" }}>None</p> : matchedSkills.map((s, i) => (
-                      <span key={i} className="badge bg-success m-1">{s}</span>
-                    ))}
+                    {matchedSkills.length === 0 ? <p style={{ fontSize: "12px" }}>None</p> : 
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", justifyContent: "center" }}>
+                        {matchedSkills.map((s, i) => (
+                          <span key={i} className="badge bg-success m-1" style={{ whiteSpace: "normal", wordBreak: "break-word" }}>{s}</span>
+                        ))}
+                      </div>
+                    }
                   </div>
-                  <div>
+                  <div style={{ flex: "1 1 140px", minWidth: "140px" }}>
                     <h6 style={{ color: "#ef4444" }}>Missing Skills</h6>
-                    {missingSkills.length === 0 ? <p style={{ fontSize: "12px" }}>None</p> : missingSkills.map((s, i) => (
-                      <span key={i} className="badge bg-danger m-1">{s}</span>
-                    ))}
+                    {missingSkills.length === 0 ? <p style={{ fontSize: "12px" }}>None</p> : 
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", justifyContent: "center" }}>
+                        {missingSkills.map((s, i) => (
+                          <span key={i} className="badge bg-danger m-1" style={{ whiteSpace: "normal", wordBreak: "break-word" }}>{s}</span>
+                        ))}
+                      </div>
+                    }
                   </div>
                 </div>
               </div>
@@ -475,12 +509,16 @@ function App() {
               {/* Suggestions box */}
               <div className="suggestion-box mt-4">
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              {/* SUGGESTIONS BOX WITH THE UTILITY BUTTON */}
+              <div className="suggestion-box mt-4" style={{ padding: "15px" }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", justifyContent: "between", alignItems: "center", marginBottom: "12px" }}>
                   <h4 style={{ margin: 0 }}>💡 Suggestions</h4>
                   {suggestions.length > 0 && (
                     <button
                       type="button"
                       className={`app-btn app-btn--accent${copied ? " is-success" : ""}`}
                       onClick={copySuggestionsToClipboard}
+                      style={{ minHeight: "44px" }}
                     >
                       {copied ? "✅ Copied!" : "📋 Copy Suggestions"}
                     </button>
@@ -488,7 +526,7 @@ function App() {
                 </div>
 
                 {suggestions.map((s: string, i: number) => (
-                  <div key={i} className="suggestion-item">📌 {s}</div>
+                  <div key={i} className="suggestion-item" style={{ wordBreak: "break-word", textAlign: "left" }}>📌 {s}</div>
                 ))}
 
                 <div style={{ marginTop: "24px", textAlign: "center" }}>
@@ -496,6 +534,7 @@ function App() {
                     type="button"
                     className="app-btn app-btn--secondary"
                     onClick={resetAnalysis}
+                    style={{ minHeight: "44px", width: "100%", maxWidth: "250px" }}
                   >
                     🔄 Start New Analysis
                   </button>
