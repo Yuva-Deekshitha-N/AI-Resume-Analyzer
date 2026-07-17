@@ -295,6 +295,7 @@ function App() {
     <>
       <HistorySidebar
         entries={entries}
+        activeFileName={activeFileName}
         onSelect={selectHistoryEntry}
         onDelete={handleDeleteEntry}
         onClear={handleClearAll}
