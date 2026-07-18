@@ -57,11 +57,28 @@
 
 ---
 
-## Project Preview
+## Project Preview/ Screenshots
+
+### 🏠 Home Page
 
 <div align="center">
-  <img src="client/public/ui.png" alt="Application Interface Preview" width="850" style="border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);"/>
+  <img src="frontend\src\assets\screenshots\homepage.png" alt="Application Interface Preview" width="850" style="border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);"/>
 </div>
+
+
+### 📤 Resume Upload
+
+<div align="center">
+  <img src="frontend\src\assets\screenshots\awqy65.gif" alt="Application Interface Preview" width="850" style="border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);"/>
+</div>
+
+
+### 📜 Analysis Result
+
+<div align="center">
+  <img src="frontend\src\assets\screenshots\result.png" alt="Application Interface Preview" width="850" style="border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);"/>
+</div>
+
 
 ---
 
@@ -313,6 +330,17 @@ We welcome contributions of all levels under the **ECSoC'26** program!
 4. Push changes to your fork and create a **Pull Request (PR)** targeting the upstream `main` branch.
 
 Please review active issues before creating duplicates, and always link open issues to your Pull Request!
+
+---
+
+## Code Owners
+
+This repository uses a [`CODEOWNERS`](.github/CODEOWNERS) file to automatically request reviews from maintainers whenever a Pull Request is opened.
+
+- The file lives at `.github/CODEOWNERS`.
+- Currently, all files (`*`) are owned by [@Muskankr](https://github.com/Muskankr).
+- When you open a PR, GitHub will automatically add the code owner as a reviewer.
+- As the project grows, ownership can be split by folder (e.g. `/frontend/` → frontend maintainers, `/backend/` → backend maintainers).
 
 ---
 

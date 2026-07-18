@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import "./index.css";
 import { AtsScore } from "./AtsScore";
@@ -7,6 +7,10 @@ import { HistorySidebar } from "./HistorySidebar";
 import { useAuth } from "./hooks/useAuth";
 import { AuthModal } from "./AuthModal";
 import { Footer } from "./Footer";
+import AnalysisSkeleton from "./components/AnalysisSkeleton/AnalysisSkeleton";
+import { InfoTooltip } from "./components/InfoTooltip";
+import { Navbar } from "./components/Navbar";
+import EmptyState from "./components/EmptyState";
 
 type Theme = "light" | "dark";
 
@@ -23,6 +27,74 @@ function getInitialTheme(): Theme {
   return "light";
 }
 
+function highlightSkills(text: string, skills: string[]): React.ReactNode[] {
+  if (!text) return [];
+  if (skills.length === 0) return [text];
+
+  const sorted = [...skills].sort((a, b) => b.length - a.length);
+  const escaped = sorted.map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const pattern = new RegExp(`(?<![\\w])(${escaped.join('|')})(?![\\w])`, 'gi');
+  const parts = text.split(pattern);
+  const skillSet = new Set(skills.map(s => s.toLowerCase()));
+
+  return parts.map((part, i) =>
+    skillSet.has(part.toLowerCase())
+      ? <mark key={i} className="skill-highlight">{part}</mark>
+      : part
+  );
+}
+
+function ResumePreview({ text, skills }: { text: string; skills: string[] }) {
+  if (!text) return null;
+  return (
+    <div className="resume-preview mt-4">
+      <h4>📄 Resume Text Preview</h4>
+      <pre className="resume-preview__body">
+        {highlightSkills(text, skills)}
+      </pre>
+    </div>
+  );
+}
+
+interface SuggestionCardProps {
+  text: string;
+  index: number;
+}
+
+const SuggestionCard: React.FC<SuggestionCardProps> = ({ text, index }) => {
+  const [copied, setCopied] = React.useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="suggestion-card">
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
+          <span style={{ fontSize: "16px" }}>💡</span>
+          <span style={{ fontSize: "12px", fontWeight: "700", color: "#a5b4fc", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+            Recommendation #{index + 1}
+          </span>
+        </div>
+        <p style={{ margin: 0, fontSize: "var(--font-size-sm)", color: "#e2e8f0", lineHeight: "1.6" }}>
+          {text}
+        </p>
+      </div>
+      
+      <button 
+        onClick={handleCopy} 
+        className="suggestion-copy-btn"
+        aria-label="Copy recommendation text"
+      >
+        {copied ? "✅ Copied" : "📋 Copy Text"}
+      </button>
+    </div>
+  );
+};
+
 function App() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
   const [loading, setLoading] = useState(false);
@@ -30,6 +102,8 @@ function App() {
   const [score, setScore] = useState<number | null>(null);
   const [skills, setSkills] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const [showExportDropdown, setShowExportDropdown] = useState(false);
 
   // Component States
   const [targetRole, setTargetRole] = useState("Frontend Developer");
@@ -39,32 +113,55 @@ function App() {
   const [copied, setCopied] = useState(false);
   const [analysisSource, setAnalysisSource] = useState<"sample" | "upload" | null>(null);
   const [jobDesc, setJobDesc] = useState("");
+  const [resumeText, setResumeText] = useState<string>("");
 
   // Auth
   const { user, signup, login, logout } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   // History
-  const { entries, deleteEntry, clearHistory, setEntries } = useAnalysisHistory();
+  const { entries, addEntry, deleteEntry, clearHistory, setEntries } = useAnalysisHistory();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [activeFileName, setActiveFileName] = useState("");
 
   const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000";
+  
+  const handleDeleteEntry = async (id: string) => {
+    if (user) {
+      try {
+        await axios.delete(`${backendUrl}/api/history/${id}/`, {
+          headers: { Authorization: `Bearer ${user.token}` },
+        });
+      } catch (error) {
+        console.error("Failed to delete from database", error);
+      }
+    }
+    deleteEntry(id);
+  };
 
   const MAX_CHARS = 2000;
-  const isClose = jobDesc.length >= MAX_CHARS * 0.9; // 90% threshold
+  const isClose = jobDesc.length >= MAX_CHARS * 0.9;
   const isOver = jobDesc.length > MAX_CHARS;
+
+  const handleClearAll = async () => {
+    if (user) {
+      try {
+        await axios.delete(`${backendUrl}/api/history/clear/`, {
+          headers: { Authorization: `Bearer ${user.token}` },
+        });
+      } catch (error) {
+        console.error("Failed to clear database history", error);
+      }
+    }
+    clearHistory();
+  };
 
   const fetchDbHistory = useCallback(async (token: string) => {
     try {
       const res = await axios.get(`${backendUrl}/api/history/`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const dbEntries: AnalysisEntry[] = res.data.map((item: {
-        id: number; file_name: string; score: number; skills_found: string[];
-        suggestions: string[]; matched_skills: string[]; missing_skills: string[];
-        target_role: string; created_at: string;
-      }) => ({
+      const dbEntries: AnalysisEntry[] = res.data.map((item: any) => ({
         id: String(item.id),
         timestamp: new Date(item.created_at).getTime(),
         score: item.score,
@@ -75,7 +172,12 @@ function App() {
         targetRole: item.target_role,
         fileName: item.file_name,
       }));
-      setEntries(dbEntries);
+      const uniqueDbEntries = dbEntries.filter((entry, index, self) =>
+        index === self.findIndex((t) => (
+          t.fileName === entry.fileName && t.score === entry.score
+        ))
+      );
+      setEntries(uniqueDbEntries);
     } catch { /* silently ignore */ }
   }, [backendUrl, setEntries]);
 
@@ -91,9 +193,29 @@ function App() {
       // persistence is best-effort; ignore if storage is unavailable
     }
   }, [theme]);
+  
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY > 400) {
+        setShowBackToTop(true);
+      } else {
+        setShowBackToTop(false);
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const toggleTheme = () => {
     setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  };
+  
+  const scrollToTop = () => {
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
   };
 
   const runAnalysis = async (fileToAnalyze: File, source: "sample" | "upload") => {
@@ -104,7 +226,7 @@ function App() {
       formData.append("file", fileToAnalyze);
       formData.append("role", targetRole);
       formData.append('job_description', jobDesc);
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000";
+      
       const headers = user ? { Authorization: `Bearer ${user.token}` } : {};
       const res = await axios.post(`${backendUrl}/api/upload/`, formData, { headers });
 
@@ -113,32 +235,33 @@ function App() {
       setSuggestions(res.data.suggestions || []);
       setMatchedSkills(res.data.matched_skills || []);
       setMissingSkills(res.data.missing_skills || []);
+      setResumeText(res.data.resume_text || "");
       setActiveFileName(fileToAnalyze.name);
 
       setLoading(false);
 
       if (user) {
         await fetchDbHistory(user.token);
+      } else {
+        addEntry({
+          score: res.data.score,
+          skills: res.data.skills_found || [],
+          suggestions: res.data.suggestions || [],
+          matchedSkills: res.data.matched_skills || [],
+          missingSkills: res.data.missing_skills || [],
+          targetRole: targetRole,
+          fileName: fileToAnalyze.name,
+        });
       }
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error(error);
-
       let errorMsg = "Unknown error";
-
       if (axios.isAxiosError(error)) {
-        errorMsg =
-          error.response?.data?.error ??
-          error.message;
+        errorMsg = error.response?.data?.error ?? error.message;
       } else if (error instanceof Error) {
         errorMsg = error.message;
       }
-
-      alert(
-        source === "sample"
-          ? `Sample analysis failed: ${errorMsg}`
-          : `Upload failed: ${errorMsg}`
-      );
-
+      alert(source === "sample" ? `Sample analysis failed: ${errorMsg}` : `Upload failed: ${errorMsg}`);
       setLoading(false);
     }
   };
@@ -155,29 +278,19 @@ function App() {
     try {
       setLoading(true);
       setAnalysisSource("sample");
-
       const response = await fetch("/sample-resume.pdf");
-
       if (!response.ok) {
         throw new Error("Failed to load sample resume PDF");
       }
-
       const blob = await response.blob();
-
-      const sampleFile = new File(
-        [blob],
-        "sample-resume.pdf",
-        { type: "application/pdf" }
-      );
-
+      const sampleFile = new File([blob], "sample-resume.pdf", { type: "application/pdf" });
       await runAnalysis(sampleFile, "sample");
-
       setActiveFileName(sampleFile.name);
-    } catch (error: unknown) {
-  console.error(error);
-  alert("Could not load sample resume");
-  setLoading(false);
-}
+    } catch (error: any) {
+      console.error(error);
+      alert("Could not load sample resume");
+      setLoading(false);
+    }
   };
 
   const resetAnalysis = () => {
@@ -187,10 +300,12 @@ function App() {
     setSuggestions([]);
     setMatchedSkills([]);
     setMissingSkills([]);
+    setResumeText("");
     setShowAllSkills(false);
     setCopied(false);
     setAnalysisSource(null);
     setActiveFileName("");
+    setShowExportDropdown(false);
   };
 
   const copySuggestionsToClipboard = () => {
@@ -204,6 +319,38 @@ function App() {
       .catch((err) => console.error("Failed to copy text: ", err));
   };
 
+  const getExportTimestamp = () => {
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const d = new Date();
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
+  };
+
+  const exportJSON = () => {
+    const data = { score, skills, suggestions };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `resume-analysis-${getExportTimestamp()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setShowExportDropdown(false);
+  };
+
+  const exportCSV = () => {
+    const escapeCSV = (str: string) => `"${str.replace(/"/g, '""')}"`;
+    const header = "score,skills,suggestions\n";
+    const row = `${score},${escapeCSV(skills.join(","))},${escapeCSV(suggestions.join(","))}\n`;
+    const blob = new Blob([header + row], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `resume-analysis-${getExportTimestamp()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setShowExportDropdown(false);
+  };
+
   const selectHistoryEntry = (entry: AnalysisEntry) => {
     setScore(entry.score);
     setSkills(entry.skills);
@@ -215,43 +362,37 @@ function App() {
     setShowAllSkills(false);
     setCopied(false);
     setHistoryOpen(false);
+    setShowExportDropdown(false);
+  };
+
+  const handleLogout = () => {
+    logout();            
+    clearHistory();
   };
 
   return (
     <>
       <HistorySidebar
         entries={entries}
+        activeFileName={activeFileName}
         onSelect={selectHistoryEntry}
-        onDelete={deleteEntry}
-        onClear={clearHistory}
+        onDelete={handleDeleteEntry}
+        onClear={handleClearAll}
         isOpen={historyOpen}
         onToggle={() => setHistoryOpen((v) => !v)}
       />
 
-      <div className="container mt-5">
-        <div className="main-card text-center">
-          {/* Theme toggle */}
-          <button
-            type="button"
-            className="app-btn theme-toggle-btn"
-            onClick={toggleTheme}
-            aria-label="Toggle theme"
-            aria-pressed={theme === "dark"}
-          >
-            {theme === "light" ? "🌙 Dark Mode" : "☀️ Light Mode"}
-          </button>
+      <Navbar
+        theme={theme}
+        toggleTheme={toggleTheme}
+        user={user}
+        onLogin={() => setShowAuthModal(true)}
+        onLogout={handleLogout}
+        onHistoryClick={() => setHistoryOpen(true)}
+      />
 
-          {/* Auth bar */}
-          <div className="auth-bar">
-            {user ? (
-              <>
-                <span className="auth-username">👤 {user.username}</span>
-                <button className="auth-bar-btn" onClick={logout}>Logout</button>
-              </>
-            ) : (
-              <button className="auth-bar-btn" onClick={() => setShowAuthModal(true)}>🔐 Login / Sign Up</button>
-            )}
-          </div>
+      <div className="container mt-5 px-3">
+        <div className="main-card text-center mx-auto" style={{ width: "100%", maxWidth: "600px" }}>
 
           {showAuthModal && (
             <AuthModal
@@ -260,127 +401,162 @@ function App() {
               onClose={() => setShowAuthModal(false)}
             />
           )}
+          
+          <h1 className="mb-4 app-main-title" style={{ fontSize: "calc(1.5rem + 1.5vw)", wordBreak: "break-word" }}>
+            🚀 AI Resume Analyzer
+          </h1>
 
-          <h1 className="mb-4">🚀 AI Resume Analyzer</h1>
-
-          {/* Role Selector Dropdown */}
-          <div className="mb-4">
-            <label htmlFor="roleSelect" style={{ marginRight: "10px", fontWeight: "600", color: "#fff" }}>
-              Target Career Track:
+          {/* STEP 1: Role Selector Container */}
+          <div className="mb-5 p-4" style={{ background: "rgba(255, 255, 255, 0.02)", borderRadius: "var(--radius-lg)", border: "1px solid rgba(255,255,255,0.04)" }}>
+            <label htmlFor="roleSelect" style={{ display: "block", marginBottom: "12px", fontWeight: "600", color: "#e2e8f0", fontSize: "var(--font-size-sm)" }}>
+              1️⃣ Choose your Target Career Track
             </label>
-            <select
-              id="roleSelect"
-              value={targetRole}
-              onChange={(e) => setTargetRole(e.target.value)}
-              style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #ccc" }}
-            >
-              <option value="Frontend Developer">Frontend Developer</option>
-              <option value="Backend Developer">Backend Developer</option>
-              <option value="Data Analyst">Data Analyst</option>
-            </select>
+            <div className="custom-select-container" style={{ display: "flex", justifyContent: "center" }}>
+              <select
+                id="roleSelect"
+                value={targetRole}
+                onChange={(e) => setTargetRole(e.target.value)}
+                className="custom-select-element role-select-dropdown"
+                style={{ padding: "10px 16px", borderRadius: "var(--radius-sm)", border: "1px solid rgba(255,255,255,0.15)", width: "100%", maxWidth: "320px", background: "#1e1e2f", color: "#fff", fontSize: "var(--font-size-sm)" }}
+              >
+                <option value="Frontend Developer">Frontend Developer</option>
+                <option value="Backend Developer">Backend Developer</option>
+                <option value="Data Analyst">Data Analyst</option>
+              </select>
+            </div>
           </div>
 
-          <div className="upload-box mb-3">
-            <input
-              type="file"
-              id="fileUpload"
-              hidden
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                if (e.target.files) setFile(e.target.files[0]);
-              }}
-            />
-            <label htmlFor="fileUpload" className="upload-label">
-               {file ? file.name : "Drag & Drop Resume or Click to Upload"}
-            </label>
-          </div>
-          <div className="mb-4" style={{ textAlign: "left" }}>
-            <label htmlFor="jobDescription" 
-            style={{ fontWeight: "600", display: "block", marginBottom: "8px" }}
-            >Job Description</label>
-            <textarea
+          {/* STEP 2: Upload Container */}
+          <div className="mb-5">
+            <span style={{ display: "block", marginBottom: "12px", fontWeight: "600", color: "#e2e8f0", fontSize: "var(--font-size-sm)" }}>
+              2️⃣ Upload your Document & Job Details
+            </span>
+            <div className="upload-box mb-4" style={{ padding: "32px 20px", border: "2px dashed var(--upload-border)", borderRadius: "var(--radius-lg)", background: "var(--upload-bg)", transition: "all 0.3s ease" }}>
+              <input
+                type="file"
+                id="fileUpload"
+                hidden
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  if (e.target.files) setFile(e.target.files[0]);
+                }}
+              />
+              <label htmlFor="fileUpload" className="upload-label" style={{ cursor: "pointer", display: "block", fontSize: "var(--font-size-base)", wordBreak: "break-all" }}>
+                📄 {file ? <strong style={{ color: "#a5b4fc" }}>{file.name}</strong> : "Drag & Drop Resume or Click to Browse"}
+              </label>
+            </div>
+
+            <div className="mb-4" style={{ textAlign: "left" }}>
+              <label htmlFor="jobDescription" style={{ fontWeight: "600", display: "block", marginBottom: "8px", color: "#e2e8f0" }}>
+                Job Description (Optional)
+              </label>
+              <textarea
                 id="jobDescription"
                 className="custom-textarea"
                 value={jobDesc}
                 onChange={(e) => setJobDesc(e.target.value)}
                 placeholder="Paste the job description here..."
-                style={{ width: '100%', minHeight: '100px' }}
-               />
-  
-          {/* The Live Counter */}
-          <div style={{ 
-            textAlign: 'right', 
-            color: isOver ? '#ef4444' : (isClose ? '#f97316' : 'inherit'),
-            opacity: isOver || isClose ? 1 : 0.7,
-            fontSize: '0.85rem',
-            marginTop: '5px',
-            fontWeight: isOver ? 'bold' : 'normal'
-            }}>
-            {jobDesc.length} / {MAX_CHARS} characters
+                style={{ width: '100%', minHeight: '100px', padding: '12px', borderRadius: 'var(--radius-md)', background: 'rgba(255, 255, 255, 0.02)', color: 'inherit', border: '1px solid rgba(255, 255, 255, 0.1)' }}
+              />
+              {/* The Live Counter */}
+              <div style={{ 
+                textAlign: 'right', 
+                color: isOver ? '#ef4444' : (isClose ? '#f97316' : 'inherit'),
+                opacity: isOver || isClose ? 1 : 0.7,
+                fontSize: '0.85rem',
+                marginTop: '5px',
+                fontWeight: isOver ? 'bold' : 'normal'
+              }}>
+                {jobDesc.length} / {MAX_CHARS} characters
+              </div>
+            </div>
           </div>
-        </div>
-          <div style={{ display: "flex", gap: "12px", justifyContent: "center", alignItems: "center" }} className="mb-3">
+
+          {/* STEP 3: Action Buttons */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", justifyContent: "center", alignItems: "center" }} className="mb-4">
             <button
               className="analyze-btn"
               onClick={uploadResume}
               disabled={loading}
+              style={{
+                padding: "12px 36px",
+                fontSize: "var(--font-size-base)",
+                fontWeight: "700",
+                letterSpacing: "0.5px",
+                backgroundColor: "#6366f1",
+                color: "#fff",
+                border: "none",
+                borderRadius: "var(--radius-md)",
+                cursor: "pointer",
+                boxShadow: "var(--shadow-card)",
+                transition: "transform 0.2s ease, background-color 0.2s ease",
+                flex: "1 1 200px",
+                minHeight: "44px",
+                maxWidth: "280px"
+              }}
             >
-              {loading && analysisSource === "upload" ? "⏳ Extracting and analyzing resume text..." : "🚀 Analyze Resume"}
+              {loading && analysisSource === "upload" ? "⏳ Processing..." : "🚀 Analyze Resume"}
             </button>
+            
             <button
               className="secondary-btn"
               onClick={handleSampleResume}
               disabled={loading}
               type="button"
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "var(--btn-secondary-text)",
+                fontSize: "var(--font-size-sm)",
+                textDecoration: "underline",
+                cursor: "pointer",
+                minHeight: "44px",
+                flex: "1 1 200px",
+                maxWidth: "280px"
+              }}
             >
-              {loading && analysisSource === "sample" ? "⏳ Loading Sample..." : "Try Sample Resume"}
+              {loading && analysisSource === "sample" ? "⏳ Loading..." : "Try Sample Resume"}
             </button>
           </div>
 
-          {/* Loading spinner — shown while the resume is being analyzed */}
-          {loading && (
-            <div
-              className="loader"
-              role="status"
-              aria-live="polite"
-              aria-label="Analyzing resume, please wait"
-            >
-              <span className="sr-only">Analyzing resume, please wait…</span>
-            </div>
-          )}
+          {loading && <AnalysisSkeleton />}
+          {score === null && !loading && <EmptyState />}
 
           {/* Results */}
           {score !== null && (
             <>
               {analysisSource === "sample" && (
-                <div className="sample-notice-banner mb-4">
+                <div className="sample-notice-banner mb-4" style={{ padding: "10px", wordBreak: "break-word" }}>
                   <span>ℹ️ Viewing Sample Resume Analysis</span>
-                  <span style={{ fontWeight: "normal", fontSize: "13px" }}>
+                  <span style={{ fontWeight: "normal", fontSize: "13px", display: "block" }}>
                     — This analysis is based on a bundled sample resume.
                   </span>
                 </div>
               )}
 
-              <AtsScore score={score} />
+              <div id="ats-score">
+                <AtsScore score={score} />
+              </div>
 
-              <h5 className="analysis-done">✅ Resume Analysis Complete</h5>
+              <ResumePreview text={resumeText} skills={skills} />
+
+              <h5 className="analysis-done mt-3">✅ Resume Analysis Complete</h5>
               {activeFileName && (
-                <p style={{ fontSize: "13px", opacity: 0.7, marginTop: "-8px" }}>📄 {activeFileName}</p>
+                <p style={{ fontSize: "13px", opacity: 0.7, marginTop: "-8px", wordBreak: "break-all" }}>📄 {activeFileName}</p>
               )}
 
-              {/* Skills container */}
               <div className="mt-4">
                 <h4>Skills Found ({skills.length})</h4>
                 {skills.length === 0 && <p>No skills detected</p>}
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", justifyContent: "center" }}>
                   {(showAllSkills ? skills : skills.slice(0, 15)).map((skill: string, i: number) => (
-                    <span key={i} className="skill-badge">{skill}</span>
+                    <span key={i} className="skill-badge" style={{ wordBreak: "break-word" }}>{skill}</span>
                   ))}
                 </div>
                 {skills.length > 15 && (
                   <button
                     type="button"
                     className="app-btn app-btn--secondary"
-                    style={{ marginTop: "16px" }}
+                    style={{ marginTop: "16px", minHeight: "44px" }}
                     onClick={() => setShowAllSkills(!showAllSkills)}
                   >
                     {showAllSkills ? "Show Less ▲" : `Show More (${skills.length - 15} more) ▼`}
@@ -388,65 +564,171 @@ function App() {
                 )}
               </div>
 
-              {/* Skill gap matrix */}
               <div className="mt-4 p-3" style={{ background: "rgba(255,255,255,0.05)", borderRadius: "8px" }}>
-                <h4>🎯 Skill Gap Matrix ({targetRole})</h4>
-                <div style={{ display: "flex", justifyContent: "space-around", marginTop: "12px" }}>
-                  <div>
+                <h4 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', textAlign: 'center' }}>
+                  <span>🎯 Skill Gap Matrix ({targetRole})</span>
+                  <InfoTooltip content="Shows which required skills are already in your resume and which important skills are missing." />
+                </h4>
+                <div className="skill-gap-layout" style={{ display: "flex", flexWrap: "wrap", gap: "20px", justifyContent: "space-around", marginTop: "12px" }}>
+                  <div style={{ flex: "1 1 140px", minWidth: "140px" }}>
                     <h6 style={{ color: "#22c55e" }}>Matched Skills</h6>
-                    {matchedSkills.length === 0 ? <p style={{ fontSize: "12px" }}>None</p> : matchedSkills.map((s, i) => (
-                      <span key={i} className="badge bg-success m-1">{s}</span>
-                    ))}
+                    {matchedSkills.length === 0 ? <p style={{ fontSize: "12px" }}>None</p> : 
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", justifyContent: "center" }}>
+                        {matchedSkills.map((s, i) => (
+                          <span key={i} className="badge bg-success m-1" style={{ whiteSpace: "normal", wordBreak: "break-word" }}>{s}</span>
+                        ))}
+                      </div>
+                    }
                   </div>
-                  <div>
+                  <div style={{ flex: "1 1 140px", minWidth: "140px" }}>
                     <h6 style={{ color: "#ef4444" }}>Missing Skills</h6>
-                    {missingSkills.length === 0 ? <p style={{ fontSize: "12px" }}>None</p> : missingSkills.map((s, i) => (
-                      <span key={i} className="badge bg-danger m-1">{s}</span>
-                    ))}
+                    {missingSkills.length === 0 ? <p style={{ fontSize: "12px" }}>None</p> : 
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", justifyContent: "center" }}>
+                        {missingSkills.map((s, i) => (
+                          <span key={i} className="badge bg-danger m-1" style={{ whiteSpace: "normal", wordBreak: "break-word" }}>{s}</span>
+                        ))}
+                      </div>
+                    }
                   </div>
                 </div>
               </div>
 
-
-              {/* SUGGESTIONS BOX WITH THE UTILITY BUTTON */}
-              <div className="suggestion-box mt-4">
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                  <h4 style={{ margin: 0 }}>💡 Suggestions</h4>
-                  {suggestions.length > 0 && (
-                    <button
-                      type="button"
-                      className={`app-btn app-btn--accent${copied ? " is-success" : ""}`}
-                      onClick={copySuggestionsToClipboard}
-                    >
-                      {copied ? "✅ Copied!" : "📋 Copy Suggestions"}
-                    </button>
-                  )}
+              <div className="mt-5 p-4" style={{ background: "rgba(30, 30, 47, 0.4)", borderRadius: "var(--radius-lg)", border: "1px solid rgba(255, 255, 255, 0.04)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
+                  <div style={{ textAlign: "left" }}>
+                    <h4 style={{ margin: "0 0 4px 0", fontSize: "var(--font-size-base)", color: "#fff" }}>
+                      💡 Dynamic Profile Optimization Suggestions
+                    </h4>
+                    <p style={{ margin: 0, fontSize: "var(--font-size-sm)", color: "#64748b" }}>
+                      Actionable revisions targeted at elevating scanning compatibility ranks.
+                    </p>
+                  </div>
+                  
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+                    {suggestions.length > 0 && (
+                      <button
+                        type="button"
+                        className={`app-btn app-btn--accent${copied ? " is-success" : ""}`}
+                        onClick={copySuggestionsToClipboard}
+                        style={{ minHeight: "44px", padding: "8px 16px", fontSize: "13px" }}
+                      >
+                        {copied ? "✅ Copied!" : "📋 Copy All"}
+                      </button>
+                    )}
+                    
+                    <div style={{ position: "relative", display: "inline-block" }}>
+                      <button
+                        type="button"
+                        className="app-btn app-btn--secondary"
+                        onClick={() => setShowExportDropdown(!showExportDropdown)}
+                        style={{ minHeight: "44px" }}
+                      >
+                        Export ▼
+                      </button>
+                      {showExportDropdown && (
+                        <div style={{
+                          position: "absolute",
+                          top: "100%",
+                          right: 0,
+                          marginTop: "4px",
+                          backgroundColor: theme === "dark" ? "#1f2937" : "#ffffff",
+                          border: `1px solid ${theme === "dark" ? "#374151" : "#e5e7eb"}`,
+                          borderRadius: "6px",
+                          boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+                          zIndex: 10,
+                          display: "flex",
+                          flexDirection: "column",
+                          minWidth: "120px",
+                          overflow: "hidden"
+                        }}>
+                          <button
+                            type="button"
+                            onClick={exportJSON}
+                            style={{ padding: "8px 12px", background: "transparent", border: "none", color: theme === "dark" ? "#f3f4f6" : "#111827", textAlign: "left", cursor: "pointer", borderBottom: `1px solid ${theme === "dark" ? "#374151" : "#e5e7eb"}` }}
+                            onMouseOver={(e) => (e.currentTarget.style.backgroundColor = theme === "dark" ? "#374151" : "#f3f4f6")}
+                            onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                          >
+                            Export JSON
+                          </button>
+                          <button
+                            type="button"
+                            onClick={exportCSV}
+                            style={{ padding: "8px 12px", background: "transparent", border: "none", color: theme === "dark" ? "#f3f4f6" : "#111827", textAlign: "left", cursor: "pointer" }}
+                            onMouseOver={(e) => (e.currentTarget.style.backgroundColor = theme === "dark" ? "#374151" : "#f3f4f6")}
+                            onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                          >
+                            Export CSV
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
-                {suggestions.map((s: string, i: number) => (
-                  <div key={i} className="suggestion-item">📌 {s}</div>
-                ))}
+                {suggestions.length === 0 ? (
+                  <p style={{ color: "#64748b", fontStyle: "italic", fontSize: "var(--font-size-sm)", textAlign: "left", margin: "16px 0 0 0" }}>
+                    No actionable layout suggestions generated for the current profile structure matrix.
+                  </p>
+                ) : (
+                  <div className="suggestions-grid">
+                    {suggestions.map((suggestion, index) => (
+                      <SuggestionCard 
+                        key={index} 
+                        text={suggestion} 
+                        index={index} 
+                      />
+                    ))}
+                  </div>
+                )}
 
-                {/* Reset Button */}
                 <div style={{ marginTop: "24px", textAlign: "center" }}>
                   <button
                     type="button"
                     className="app-btn app-btn--secondary"
                     onClick={resetAnalysis}
+                    style={{ minHeight: "44px", width: "100%", maxWidth: "250px" }}
                   >
                     🔄 Start New Analysis
                   </button>
                 </div>
               </div>
             </>
-          )}   {/* closes the conditional block */}
-        </div> {/* closes .main-card */}
-      </div> {/* closes .container */}
+          )}
+        </div> 
+      </div>
 
-      <Footer />  {/* footer should be outside main container */}
+      <Footer /> 
 
+      {showBackToTop && (
+        <button
+          onClick={scrollToTop}
+          style={{
+            position: "fixed",
+            bottom: "30px",
+            right: "30px",
+            backgroundColor: "#6366f1",
+            color: "#fff",
+            border: "none",
+            borderRadius: "50%",
+            width: "50px",
+            height: "50px",
+            fontSize: "20px",
+            cursor: "pointer",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+            zIndex: 1000,
+            transition: "all 0.3s ease",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+          title="Back to Top"
+          aria-label="Back to Top"
+        >
+          ▲
+        </button>
+      )}
     </>
-  ); {/* closes the return fragment */ }
-} {/* closes App function */ }
+  ); 
+}
 
 export default App;
