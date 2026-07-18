@@ -11,7 +11,7 @@ import AnalysisSkeleton from "./components/AnalysisSkeleton/AnalysisSkeleton";
 import { InfoTooltip } from "./components/InfoTooltip";
 import { Navbar } from "./components/Navbar";
 import EmptyState from "./components/EmptyState";
-
+import { StepProgress } from "./components/StepProgress";
 type Theme = "light" | "dark";
 
 function getInitialTheme(): Theme {
@@ -115,6 +115,13 @@ function App() {
   const [copied, setCopied] = useState(false);
   const [analysisSource, setAnalysisSource] = useState<"sample" | "upload" | null>(null);
   const [resumeText, setResumeText] = useState<string>("");
+
+  let currentStep: 1 | 2 | 3 = 1;
+  if (loading) {
+    currentStep = 2;
+  } else if (!loading && score !== null) {
+    currentStep = 3;
+  }
 
   // Auth
   const { user, signup, login, logout } = useAuth();
@@ -390,9 +397,6 @@ function App() {
     clearHistory();
   };
 
-    logout();          
-    clearHistory();
-  };
   return (
     <>
       <HistorySidebar
@@ -424,37 +428,14 @@ function App() {
               onClose={() => setShowAuthModal(false)}
             />
           )}
-          <h1 className="mb-4">🚀 AI Resume Analyzer</h1>
+          <h1 className="mb-4 app-main-title" style={{ fontSize: "calc(1.5rem + 1.5vw)", wordBreak: "break-word" }}>🚀 AI Resume Analyzer</h1>
+
+          <StepProgress currentStep={currentStep} />
 
           {/* STEP 1: Role Selector Container */}
-          <div className="mb-5 p-3" style={{ background: "rgba(255, 255, 255, 0.02)", borderRadius: "var(--radius-md)", border: "1px solid rgba(255,255,255,0.05)" }}>
-            <label htmlFor="roleSelect" style={{ display: "block", marginBottom: "8px", fontWeight: "600", color: "#e2e8f0", fontSize: "var(--font-size-sm)" }}>
-              1️⃣ Choose your Target Career Track
-
-          <h1 className="mb-4">🚀 AI Resume Analyzer</h1>
-
-          {/* Role Selector Container */}
-          <div className="mb-5 p-4" style={{ background: "rgba(255, 255, 255, 0.02)", borderRadius: "var(--radius-lg)", border: "1px solid rgba(255,255,255,0.04)" }}>
-            <label 
-              htmlFor="roleSelect" 
-              style={{ display: "block", marginBottom: "12px", fontWeight: "600", color: "#e2e8f0", fontSize: "var(--font-size-sm)" }}
-<h1 className="mb-4 app-main-title" style={{ fontSize: "calc(1.5rem + 1.5vw)", wordBreak: "break-word" }}>🚀 AI Resume Analyzer</h1>
-          {/* Role Selector Dropdown */}
           <div className="mb-4 d-flex flex-column align-items-center flex-sm-row justify-content-center role-selector-container" style={{ gap: "8px" }}>
             <label htmlFor="roleSelect" className="role-select-label" style={{ fontWeight: "600" }}>
               Target Career Track:
-            </label>
-            <select
-              id="roleSelect"
-              className="role-select-dropdown"
-              value={targetRole}
-              onChange={(e) => setTargetRole(e.target.value)}
-
-              style={{ padding: "10px 16px", borderRadius: "var(--radius-sm)", border: "1px solid rgba(255,255,255,0.15)", width: "100%", maxWidth: "320px", background: "#1e1e2f", color: "#fff", fontSize: "var(--font-size-sm)" }}
-
-              style={{ padding: "6px 12px", borderRadius: "6px", width: "100%", maxWidth: "250px" }}
-            >
-              🎯 Target Career Track
             </label>
             <div className="custom-select-container">
               <select
@@ -472,10 +453,7 @@ function App() {
 
           {/* STEP 2: Enhanced Upload Container */}
           <div className="mb-5">
-            <span style={{ display: "block", marginBottom: "12px", fontWeight: "600", color: "#e2e8f0", fontSize: "var(--font-size-sm)" }}>
-              2️⃣ Upload your Document
-            </span>
-            <div className="upload-box mb-3" style={{ padding: "32px 20px", border: "2px dashed var(--upload-border)", borderRadius: "var(--radius-lg)", background: "var(--upload-bg)", transition: "all 0.3s ease" }}>
+            <div className="upload-box mb-3" style={{ width: "100%", maxWidth: "100%" }}>
               <input
                 type="file"
                 id="fileUpload"
@@ -484,36 +462,18 @@ function App() {
                   if (e.target.files) setFile(e.target.files[0]);
                 }}
               />
-              <label htmlFor="fileUpload" className="upload-label" style={{ cursor: "pointer", display: "block", fontSize: "var(--font-size-base)" }}>
-                📄 {file ? <strong style={{ color: "#a5b4fc" }}>{file.name}</strong> : "Drag & Drop Resume or Click to Browse"}
+              <label htmlFor="fileUpload" className="upload-label" style={{ display: "block", wordBreak: "break-all", padding: "15px" }}>
+                📄 {file ? file.name : "Drag & Drop Resume or Click to Upload"}
               </label>
             </div>
           </div>
 
-          {/* STEP 3: Prominent Call to Action Buttons */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px", alignItems: "center", marginTop: "24px" }} className="mb-4">
-          <div className="upload-box mb-3" style={{ width: "100%", maxWidth: "100%" }}>
-            <input
-              type="file"
-              id="fileUpload"
-              hidden
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                if (e.target.files) setFile(e.target.files[0]);
-              }}
-            />
-            <label htmlFor="fileUpload" className="upload-label" style={{ display: "block", wordBreak: "break-all", padding: "15px" }}>
-              📄 {file ? file.name : "Drag & Drop Resume or Click to Upload"}
-            </label>
-          </div>
 
-
-          {/* FIXED: Added responsive flex-wrap and set width boundaries for smaller screens */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", justifyContent: "center", alignItems: "center" }} className="mb-3">
             <button
               className="analyze-btn"
               onClick={uploadResume}
               disabled={loading}
-              
               style={{
                 padding: "12px 36px",
                 fontSize: "var(--font-size-base)",
@@ -531,9 +491,6 @@ function App() {
               }}
             >
               {loading && analysisSource === "upload" ? "⏳ Processing..." : "🚀 Analyze Resume"}
-              style={{ minHeight: "44px", flex: "1 1 200px", maxWidth: "100%" }}
-            >
-              {loading && analysisSource === "upload" ? "⏳ Extracting..." : "🚀 Analyze Resume"}
             </button>
             
             <button
@@ -541,7 +498,6 @@ function App() {
               onClick={handleSampleResume}
               disabled={loading}
               type="button"
-              
               style={{
                 background: "transparent",
                 border: "none",
@@ -553,9 +509,6 @@ function App() {
               }}
             >
               {loading && analysisSource === "sample" ? "⏳ Loading..." : "Or try with a sample resume"}
-              style={{ minHeight: "44px", flex: "1 1 200px", maxWidth: "100%" }}
-            >
-              {loading && analysisSource === "sample" ? "⏳ Loading..." : "Try Sample Resume"}
             </button>
           </div>
 
@@ -585,11 +538,7 @@ function App() {
 
               <h5 className="analysis-done mt-3">✅ Resume Analysis Complete</h5>
               {activeFileName && (
-
-                <p style={{ fontSize: "var(--font-size-sm)", opacity: 0.7, marginTop: "-8px" }}>📄 {activeFileName}</p>
-
                 <p style={{ fontSize: "13px", opacity: 0.7, marginTop: "-8px", wordBreak: "break-all" }}>📄 {activeFileName}</p>
-
               )}
 
               {/* Skills container */}
@@ -615,11 +564,6 @@ function App() {
 
 
               {/* Skill gap matrix */}
-              <div className="mt-4 p-3" style={{ background: "rgba(255,255,255,0.05)", borderRadius: "var(--radius-md)" }}>
-                <h4 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  🎯 Skill Gap Matrix ({targetRole})
-
-              {/* FIXED: Changed matrix container style to use flex-wrap / grid adaptation for mobile widths */}
               <div className="mt-4 p-3" style={{ background: "rgba(255,255,255,0.05)", borderRadius: "8px" }}>
                 <h4 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', textAlign: 'center' }}>
                   <span>🎯 Skill Gap Matrix ({targetRole})</span>
@@ -652,25 +596,6 @@ function App() {
 
               {/* Upgraded Modern Suggestions Section */}
               <div className="mt-5 p-4" style={{ background: "rgba(30, 30, 47, 0.4)", borderRadius: "var(--radius-lg)", border: "1px solid rgba(255, 255, 255, 0.04)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
-                  <div style={{ textAlign: "left" }}>
-                    <h4 style={{ margin: "0 0 4px 0", fontSize: "var(--font-size-base)", color: "#fff" }}>
-                      💡 Dynamic Profile Optimization Suggestions
-                    </h4>
-                    <p style={{ margin: 0, fontSize: "var(--font-size-sm)", color: "#64748b" }}>
-                      Actionable revisions targeted at elevating scanning compatibility ranks.
-                    </p>
-                  </div>
-                  {suggestions.length > 0 && (
-                    <button
-                      type="button"
-                      className={`app-btn app-btn--accent${copied ? " is-success" : ""}`}
-                      onClick={copySuggestionsToClipboard}
-                      style={{ padding: "8px 16px", fontSize: "13px" }}
-                    >
-                      {copied ? "✅ Copied!" : "📋 Copy All"}
-                    </button>
-                  )}
               {/* SUGGESTIONS BOX WITH THE UTILITY BUTTON */}
               <div className="suggestion-box mt-4" style={{ padding: "15px" }}>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
@@ -752,9 +677,6 @@ function App() {
                     ))}
                   </div>
                 )}
-                {suggestions.map((s: string, i: number) => (
-                  <div key={i} className="suggestion-item" style={{ wordBreak: "break-word", textAlign: "left" }}>📌 {s}</div>
-                ))}
 
                 {/* Reset Button */}
                 <div style={{ marginTop: "24px", textAlign: "center" }}>
@@ -767,6 +689,7 @@ function App() {
                     🔄 Start New Analysis
                   </button>
                 </div>
+                </div>
               </div>
             </>
           )}   {/* closes the conditional block */}
@@ -774,11 +697,6 @@ function App() {
       </div> {/* closes .container */}
 
       <Footer />  {/* footer should be outside main container */}
-
-    </>
-  ); 
-}
-
 
       {/* RENDER FLOATING BACK TO TOP BUTTON */}
       {showBackToTop && (
