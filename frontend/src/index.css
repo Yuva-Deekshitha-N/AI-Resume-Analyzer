@@ -936,6 +936,7 @@ border:0;
     grid-template-columns: 1fr !important;
     gap: 14px !important;
   }
+}
 
 .password-strength-label span.strength-val.medium {
   color: #f59e0b; /* Amber */
