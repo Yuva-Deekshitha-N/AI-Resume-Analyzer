@@ -997,3 +997,226 @@ border:0;
 .theme-toggle-navbar {
   margin-bottom: 0;
 }
+
+/* ==========================================================================
+   AI RESUME ANALYZER CUSTOM STYLES (Light & Dark Theme Enhancements)
+   ========================================================================== */
+
+/* Light Theme Variables */
+:root, [data-theme="light"] {
+  --text-primary: #1e293b;
+  --text-secondary: #475569;
+  --card-border: #e2e8f0;
+  --input-bg: #ffffff;
+}
+
+/* Dark Theme Variables */
+[data-theme="dark"] {
+  --text-primary: #ffffff;
+  --text-secondary: #94a3b8;
+  --card-border: #334155;
+  --input-bg: #1e293b;
+}
+
+/* Main Card Theme Swapping Overrides */
+.main-card {
+  transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.app-card-container {
+  background-color: #ffffff;
+  border: 1px solid #f1f5f9;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Responsive padding adjustment to match sm:p-8 */
+@media (min-width: 640px) {
+  .app-card-container {
+    padding: 2rem;
+  }
+}
+
+/* Dark mode override for the card container */
+[data-theme="dark"] .app-card-container {
+  background-color: #0f172a;
+  border-color: #1e293b;
+  box-shadow: none;
+}
+
+/* App Title Theme Matching */
+.app-main-title {
+  color: var(--text-primary);
+}
+
+/* Career Track Alignment Fixes */
+.role-select-label {
+  color: var(--text-secondary) !important;
+}
+
+.role-select-dropdown {
+  background-color: var(--input-bg);
+  color: var(--text-primary);
+  border: 1px solid var(--card-border) !important;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+/* Dropzone Upload Area Refinements */
+.upload-box {
+  border: 2px dashed var(--card-border) !important;
+  background-color: rgba(0, 0, 0, 0.02);
+  border-radius: 8px;
+  transition: background-color 0.2s ease;
+}
+
+[data-theme="light"] .upload-box {
+  background-color: #f8fafc;
+}
+
+[data-theme="light"] .upload-label {
+  color: #475569 !important;
+}
+
+.upload-dropzone {
+  border: 2px dashed #cbd5e1;
+  background-color: #f8fafc;
+  border-radius: 0.75rem;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.upload-dropzone:hover {
+  background-color: #f1f5f9;
+}
+
+[data-theme="dark"] .upload-dropzone {
+  border-color: #334155;
+  background-color: rgba(30, 41, 59, 0.5);
+}
+
+[data-theme="dark"] .upload-dropzone:hover {
+  background-color: rgba(51, 65, 85, 0.4);
+}
+
+/* Shared Button Structure & Hover Polish */
+.analyze-btn, .secondary-btn {
+  border-radius: 6px;
+  font-weight: 600;
+  transition: all 0.2s ease-in-out;
+}
+
+[data-theme="light"] .secondary-btn {
+  background-color: #f1f5f9 !important;
+  color: #334155 !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="light"] .secondary-btn:hover {
+  background-color: #e2e8f0 !important;
+}
+
+/* Footer Theme Alignments */
+.app-footer {
+  width: 100%;
+  padding: 1.5rem 1rem;
+  margin-top: auto;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background-color: rgba(248, 250, 252, 0.5); /* Soft off-white */
+  border-top: 1px solid #f1f5f9; /* Subtle top line */
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.app-footer__links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  color: #475569; /* Slate grey */
+  transition: color 0.2s ease;
+}
+
+.app-footer__links a:hover {
+  color: #2563eb; /* Royal blue on hover */
+}
+
+.app-footer__copy {
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin: 0;
+  color: #64748b; /* Muted slate grey */
+}
+
+/* Dark Theme Adjustments for Footer */
+[data-theme="dark"] .app-footer {
+  background-color: transparent;
+  border-top: 1px solid rgba(255, 255, 255, 0.1); 
+}
+
+[data-theme="dark"] .app-footer__links a {
+  color: #cbd5e1; 
+}
+
+[data-theme="dark"] .app-footer__links a:hover {
+  color: #fbbf24; /* Gold star glow on dark hover */
+}
+
+[data-theme="dark"] .app-footer__copy {
+  color: #94a3b8; 
+}
+
+/* ==========================================================================
+   THEME TOGGLE BUTTON VISIBILITY SUPPORT
+   ========================================================================== */
+
+/* Target the theme switch toggle dynamically across the Navbar components */
+.theme-toggle-btn,
+.navbar button:first-of-type,
+nav button:has(span) {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.5rem !important;
+  padding: 0.5rem 1rem !important;
+  border-radius: 9999px !important; /* Smooth pill shape */
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease-in-out !important;
+  
+  /* Light Theme Visibility Overrides */
+  background-color: #f1f5f9 !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #334155 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.theme-toggle-btn:hover,
+.navbar button:first-of-type:hover {
+  background-color: #e2e8f0 !important;
+  color: #1e293b !important;
+}
+
+/* Dark Theme Adjustments for Toggle Button */
+[data-theme="dark"] .theme-toggle-btn,
+[data-theme="dark"] .navbar button:first-of-type,
+[data-theme="dark"] nav button:has(span) {
+  background-color: #1e293b !important;
+  border: 1px solid #334155 !important;
+  color: #f8fafc !important;
+  box-shadow: none !important;
+}
+
+[data-theme="dark"] .theme-toggle-btn:hover,
+[data-theme="dark"] .navbar button:first-of-type:hover {
+  background-color: #334155 !important;
+  color: #ffffff !important;
+}

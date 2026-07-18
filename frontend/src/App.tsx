@@ -380,18 +380,18 @@ function App() {
             />
           )}
 
-          <h1 className="mb-4" style={{ fontSize: "calc(1.5rem + 1.5vw)", wordBreak: "break-word" }}>🚀 AI Resume Analyzer</h1>
-
+<h1 className="mb-4 app-main-title" style={{ fontSize: "calc(1.5rem + 1.5vw)", wordBreak: "break-word" }}>🚀 AI Resume Analyzer</h1>
           {/* Role Selector Dropdown */}
-          <div className="mb-4 d-flex flex-column align-items-center flex-sm-row justify-content-center" style={{ gap: "8px" }}>
-            <label htmlFor="roleSelect" style={{ fontWeight: "600", color: "#fff" }}>
+          <div className="mb-4 d-flex flex-column align-items-center flex-sm-row justify-content-center role-selector-container" style={{ gap: "8px" }}>
+            <label htmlFor="roleSelect" className="role-select-label" style={{ fontWeight: "600" }}>
               Target Career Track:
             </label>
             <select
               id="roleSelect"
+              className="role-select-dropdown"
               value={targetRole}
               onChange={(e) => setTargetRole(e.target.value)}
-              style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #ccc", width: "100%", maxWidth: "250px" }}
+              style={{ padding: "6px 12px", borderRadius: "6px", width: "100%", maxWidth: "250px" }}
             >
               <option value="Frontend Developer">Frontend Developer</option>
               <option value="Backend Developer">Backend Developer</option>
