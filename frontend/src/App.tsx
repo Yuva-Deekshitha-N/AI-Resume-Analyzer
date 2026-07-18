@@ -66,6 +66,8 @@ function App() {
   const [score, setScore] = useState<number | null>(null);
   const [skills, setSkills] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const [showExportDropdown, setShowExportDropdown] = useState(false);
 
   const [targetRole, setTargetRole] = useState("Frontend Developer");
   const [matchedSkills, setMatchedSkills] = useState<string[]>([]);
@@ -151,9 +153,29 @@ function App() {
       // persistence is best-effort; ignore if storage is unavailable
     }
   }, [theme]);
+  
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY > 400) {
+        setShowBackToTop(true);
+      } else {
+        setShowBackToTop(false);
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const toggleTheme = () => {
     setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  };
+  
+  const scrollToTop = () => {
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
   };
 
   const runAnalysis = async (fileToAnalyze: File, source: "sample" | "upload") => {
@@ -180,7 +202,8 @@ function App() {
 
       if (user) {
         await fetchDbHistory(user.token);
-      } else {
+      }
+      else {
         addEntry({
           score: res.data.score,
           skills: res.data.skills_found || [],
@@ -261,6 +284,7 @@ function App() {
     setCopied(false);
     setAnalysisSource(null);
     setActiveFileName("");
+    setShowExportDropdown(false);
   };
 
   const copySuggestionsToClipboard = () => {
@@ -274,6 +298,38 @@ function App() {
       .catch((err) => console.error("Failed to copy text: ", err));
   };
 
+  const getExportTimestamp = () => {
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const d = new Date();
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
+  };
+
+  const exportJSON = () => {
+    const data = { score, skills, suggestions };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `resume-analysis-${getExportTimestamp()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setShowExportDropdown(false);
+  };
+
+  const exportCSV = () => {
+    const escapeCSV = (str: string) => `"${str.replace(/"/g, '""')}"`;
+    const header = "score,skills,suggestions\n";
+    const row = `${score},${escapeCSV(skills.join(","))},${escapeCSV(suggestions.join(","))}\n`;
+    const blob = new Blob([header + row], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `resume-analysis-${getExportTimestamp()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setShowExportDropdown(false);
+  };
+
   const selectHistoryEntry = (entry: AnalysisEntry) => {
     setScore(entry.score);
     setSkills(entry.skills);
@@ -285,17 +341,18 @@ function App() {
     setShowAllSkills(false);
     setCopied(false);
     setHistoryOpen(false);
+    setShowExportDropdown(false);
   };
 
   const handleLogout = () => {
-    logout();
+    logout();          
     clearHistory();
   };
-
   return (
     <>
       <HistorySidebar
         entries={entries}
+        activeFileName={activeFileName}
         onSelect={selectHistoryEntry}
         onDelete={handleDeleteEntry}
         onClear={handleClearAll}
@@ -371,6 +428,8 @@ function App() {
             </label>
           </div>
 
+
+          {/* FIXED: Added responsive flex-wrap and set width boundaries for smaller screens */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", justifyContent: "center", alignItems: "center" }} className="mb-3">
             <button
               className="analyze-btn"
@@ -489,6 +548,7 @@ function App() {
                     </button>
                   )}
                 </div>
+                
 
                 {suggestions.map((s: string, i: number) => (
                   <div key={i} className="suggestion-item" style={{ wordBreak: "break-word", textAlign: "left", display: "flex", alignItems: "flex-start", gap: "6px" }}>
@@ -513,9 +573,37 @@ function App() {
         </div>
       </div>
 
-      <Footer />
+      {/* RENDER FLOATING BACK TO TOP BUTTON */}
+      {showBackToTop && (
+        <button
+          onClick={scrollToTop}
+          style={{
+            position: "fixed",
+            bottom: "30px",
+            right: "30px",
+            backgroundColor: "#6366f1",
+            color: "#fff",
+            border: "none",
+            borderRadius: "50%",
+            width: "50px",
+            height: "50px",
+            fontSize: "20px",
+            cursor: "pointer",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+            zIndex: 1000,
+            transition: "all 0.3s ease",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+          title="Back to Top"
+          aria-label="Back to Top"
+        >
+          ▲
+        </button>
+      )}
     </>
-  );
-}
+  ); /* closes the return fragment */
+} /* closes App function */
 
 export default App;
