@@ -9,7 +9,7 @@ import { AuthModal } from "./AuthModal";
 import { Footer } from "./Footer";
 import AnalysisSkeleton from "./components/AnalysisSkeleton/AnalysisSkeleton";
 import { InfoTooltip } from "./components/InfoTooltip";
-import { useToast } from "./hooks/useToast";
+import { Navbar } from "./components/Navbar";
 
 type Theme = "light" | "dark";
 
@@ -58,7 +58,6 @@ function ResumePreview({ text, skills }: { text: string; skills: string[] }) {
 }
 
 function App() {
-  const { showToast } = useToast();
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
   const [loading, setLoading] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -227,11 +226,10 @@ function App() {
         errorMsg = error.message;
       }
 
-      showToast(
+      alert(
         source === "sample"
           ? `Sample analysis failed: ${errorMsg}`
-          : `Upload failed: ${errorMsg}`,
-        "error"
+          : `Upload failed: ${errorMsg}`
       );
 
       setLoading(false);
@@ -240,7 +238,7 @@ function App() {
 
   const uploadResume = async () => {
     if (!file) {
-      showToast("Please upload resume", "error");
+      alert("Please upload resume");
       return;
     }
     await runAnalysis(file, "upload");
@@ -270,7 +268,7 @@ function App() {
       setActiveFileName(sampleFile.name);
     } catch (error: unknown) {
       console.error(error);
-      showToast("Could not load sample resume", "error");
+      alert("Could not load sample resume");
       setLoading(false);
     }
   };
@@ -362,30 +360,17 @@ function App() {
         onToggle={() => setHistoryOpen((v) => !v)}
       />
 
+      <Navbar
+        theme={theme}
+        toggleTheme={toggleTheme}
+        user={user}
+        onLogin={() => setShowAuthModal(true)}
+        onLogout={handleLogout}
+        onHistoryClick={() => setHistoryOpen(true)}
+      />
+
       <div className="container mt-5 px-3"> {/* Added padding safety track */}
         <div className="main-card text-center mx-auto" style={{ width: "100%", maxWidth: "600px" }}>
-          {/* Theme toggle */}
-          <button
-            type="button"
-            className="app-btn theme-toggle-btn"
-            onClick={toggleTheme}
-            aria-label="Toggle theme"
-            aria-pressed={theme === "dark"}
-          >
-            {theme === "light" ? "🌙 Dark Mode" : "☀️ Light Mode"}
-          </button>
-
-          {/* Auth bar */}
-          <div className="auth-bar">
-            {user ? (
-              <>
-                <span className="auth-username">👤 {user.username}</span>
-                <button className="auth-bar-btn" onClick={handleLogout}>Logout</button>
-              </>
-            ) : (
-              <button className="auth-bar-btn" onClick={() => setShowAuthModal(true)}>🔐 Login / Sign Up</button>
-            )}
-          </div>
 
           {showAuthModal && (
             <AuthModal
@@ -465,7 +450,9 @@ function App() {
                 </div>
               )}
 
-              <AtsScore score={score} />
+              <div id="ats-score">
+                <AtsScore score={score} />
+              </div>
 
               <ResumePreview text={resumeText} skills={skills} />
 
