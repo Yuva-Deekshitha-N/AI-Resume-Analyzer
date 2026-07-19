@@ -20,6 +20,7 @@ import EmptyState from "./components/EmptyState";
 import { StepProgress } from "./components/StepProgress";
 import resultScreenshot from "./assets/screenshots/result.png";
 import { OnboardingTour } from "./components/OnboardingTour";
+import { HowItWorks } from "./components/HowItWorks";
 
 type Theme = "light" | "dark";
 
@@ -126,6 +127,8 @@ function App() {
   const [jobDesc, setJobDesc] = useState("");
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [resumeText, setResumeText] = useState<string>("");
+  const [activeFileName, setActiveFileName] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   let currentStep: 1 | 2 | 3 = 1;
   if (loading) {
@@ -139,8 +142,6 @@ function App() {
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   const { entries, addEntry, deleteEntry, clearHistory, setEntries } = useAnalysisHistory();
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [activeFileName, setActiveFileName] = useState("");
 
   const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000";
   
@@ -207,20 +208,11 @@ function App() {
     document.documentElement.setAttribute("data-theme", theme);
     try {
       localStorage.setItem("theme", theme);
-    } catch {
-      // persistence is best-effort; ignore if storage is unavailable
-    }
+    } catch {}
   }, [theme]);
   
   useEffect(() => {
-    const handleScroll = () => {
-      if (window.scrollY > 400) {
-        setShowBackToTop(true);
-      } else {
-        setShowBackToTop(false);
-      }
-    };
-
+    const handleScroll = () => setShowBackToTop(window.scrollY > 400);
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
@@ -281,6 +273,7 @@ function App() {
       const formData = new FormData();
       formData.append("file", fileToAnalyze);
       formData.append("role", targetRole);
+
       formData.append('job_description', jobDesc);
       
       const headers = user ? { Authorization: `Bearer ${user.token}` } : {};
@@ -323,10 +316,7 @@ function App() {
   };
 
   const uploadResume = async () => {
-    if (!file) {
-      alert("Please upload resume");
-      return;
-    }
+    if (!file) return alert("Please upload resume");
     await runAnalysis(file, "upload");
   };
 
@@ -676,7 +666,15 @@ function App() {
 
           {/* Loading skeleton — shown while the resume is being analyzed */}
           {loading && <AnalysisSkeleton />}
-          {score === null && !loading && <EmptyState />}
+          {score === null && !loading && (
+            <div style={{ paddingBottom: "2rem" }}>
+              <EmptyState />
+              
+              <div className="mt-4">
+                <HowItWorks />
+              </div>
+            </div>
+          )}
 
           {score !== null && (
             <>
@@ -788,19 +786,11 @@ function App() {
                       </button>
                       {showExportDropdown && (
                         <div style={{
-                          position: "absolute",
-                          top: "100%",
-                          right: 0,
-                          marginTop: "4px",
+                          position: "absolute", top: "100%", right: 0, marginTop: "4px",
                           backgroundColor: theme === "dark" ? "#1f2937" : "#ffffff",
                           border: `1px solid ${theme === "dark" ? "#374151" : "#e5e7eb"}`,
-                          borderRadius: "6px",
-                          boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-                          zIndex: 10,
-                          display: "flex",
-                          flexDirection: "column",
-                          minWidth: "120px",
-                          overflow: "hidden"
+                          borderRadius: "6px", boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+                          zIndex: 10, display: "flex", flexDirection: "column", minWidth: "120px", overflow: "hidden"
                         }}>
                           <button
                             type="button"
@@ -833,11 +823,7 @@ function App() {
                 ) : (
                   <div className="suggestions-grid">
                     {suggestions.map((suggestion, index) => (
-                      <SuggestionCard 
-                        key={index} 
-                        text={suggestion} 
-                        index={index} 
-                      />
+                      <SuggestionCard key={index} text={suggestion} index={index} />
                     ))}
                   </div>
                 )}
@@ -914,22 +900,10 @@ function App() {
         <button
           onClick={scrollToTop}
           style={{
-            position: "fixed",
-            bottom: "30px",
-            right: "30px",
-            backgroundColor: "#6366f1",
-            color: "#fff",
-            border: "none",
-            borderRadius: "50%",
-            width: "50px",
-            height: "50px",
-            fontSize: "20px",
-            cursor: "pointer",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-            zIndex: 1000,
-            transition: "all 0.3s ease",
-            display: "flex",
-            alignItems: "center",
+            position: "fixed", bottom: "30px", right: "30px", backgroundColor: "#6366f1",
+            color: "#fff", border: "none", borderRadius: "50%", width: "50px", height: "50px",
+            fontSize: "20px", cursor: "pointer", boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+            zIndex: 1000, transition: "all 0.3s ease", display: "flex", alignItems: "center",
             justifyContent: "center"
           }}
           title="Back to Top"
