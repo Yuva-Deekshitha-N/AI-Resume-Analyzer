@@ -10,7 +10,7 @@ const steps = [
   {
     icon: <FiCpu size={36} />,
     title: "2. We analyze",
-    description: "Our AI scans your skills against your target role."
+    description: "Our system scans your skills against your target role."
   },
   {
     icon: <FiCheckCircle size={36} />,
