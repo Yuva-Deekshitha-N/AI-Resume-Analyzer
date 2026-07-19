@@ -11,6 +11,8 @@ import AnalysisSkeleton from "./components/AnalysisSkeleton/AnalysisSkeleton";
 import { InfoTooltip } from "./components/InfoTooltip";
 import { Navbar } from "./components/Navbar";
 import EmptyState from "./components/EmptyState";
+import resultScreenshot from "./assets/screenshots/result.png";
+import { OnboardingTour } from "./components/OnboardingTour";
 
 type Theme = "light" | "dark";
 
@@ -102,6 +104,8 @@ function App() {
   const [score, setScore] = useState<number | null>(null);
   const [skills, setSkills] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+
+  const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [showExportDropdown, setShowExportDropdown] = useState(false);
 
@@ -113,6 +117,7 @@ function App() {
   const [copied, setCopied] = useState(false);
   const [analysisSource, setAnalysisSource] = useState<"sample" | "upload" | null>(null);
   const [jobDesc, setJobDesc] = useState("");
+  const [showBackToTop, setShowBackToTop] = useState(false);
   const [resumeText, setResumeText] = useState<string>("");
 
   // Auth
@@ -205,6 +210,44 @@ function App() {
 
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Global Keyboard Shortcut Action Router
+  useEffect(() => {
+    const handleGlobalKeyDown = (event: KeyboardEvent) => {
+      // Using Alt key universally to avoid layout and browser conflicts
+      const modifier = event.altKey; 
+
+      // 1. Trigger Upload File Picker: Alt + U
+      if (modifier && event.key.toLowerCase() === 'u') {
+        event.preventDefault();
+        document.getElementById('fileUpload')?.click();
+      }
+
+      // 2. Trigger Clear/Reset Analysis Matrix: Alt + R
+      if (modifier && event.key.toLowerCase() === 'r') {
+        event.preventDefault();
+        resetAnalysis();
+      }
+
+      // 3. Close Active Modals/Panels: Escape
+      if (event.key === 'Escape') {
+        setShowAuthModal(false);
+        setHistoryOpen(false);
+        setShowShortcutHelp(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
+
+  // Reveal the "Back to top" button once the page is scrolled down
+  useEffect(() => {
+    const onScroll = () => setShowBackToTop(window.scrollY > 300);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   const toggleTheme = () => {
@@ -372,6 +415,7 @@ function App() {
 
   return (
     <>
+      <OnboardingTour />
       <HistorySidebar
         entries={entries}
         activeFileName={activeFileName}
@@ -391,8 +435,8 @@ function App() {
         onHistoryClick={() => setHistoryOpen(true)}
       />
 
-      <div className="container mt-5 px-3">
-        <div className="main-card text-center mx-auto" style={{ width: "100%", maxWidth: "600px" }}>
+      <div className="container mt-5 px-3"> {/* Added padding safety track */}
+        <div className="main-card text-center mx-auto" style={{ width: "100%", maxWidth: score === null && !loading ? "1100px" : "600px" }}>
 
           {showAuthModal && (
             <AuthModal
@@ -518,6 +562,88 @@ function App() {
             </button>
           </div>
 
+
+          <div className={score === null && !loading ? "hero-container" : ""}>
+            <div className={score === null && !loading ? "hero-left" : ""}>
+              <h1 className="mb-4 app-main-title" style={{ fontSize: "calc(1.5rem + 1.5vw)", wordBreak: "break-word" }}>🚀 AI Resume Analyzer</h1>
+              
+              {score === null && !loading && (
+                <p className="hero-description">
+                  Optimize your resume for Applicant Tracking Systems. Get instant scoring, identify missing skills, and receive actionable recommendations to land your dream job.
+                </p>
+              )}
+
+              {/* Role Selector Container */}
+              <div className="mb-4 p-4 role-selector-container" style={{ background: "rgba(255, 255, 255, 0.02)", borderRadius: "var(--radius-lg)", border: "1px solid rgba(255,255,255,0.04)" }}>
+                <label 
+                  htmlFor="roleSelect" 
+                  style={{ display: "block", marginBottom: "12px", fontWeight: "600", color: "#e2e8f0", fontSize: "var(--font-size-sm)" }}
+                >
+                  🎯 Target Career Track
+                </label>
+                <div className="custom-select-container">
+                  <select
+                    id="roleSelect"
+                    value={targetRole}
+                    onChange={(e) => setTargetRole(e.target.value)}
+                    className="custom-select-element"
+                  >
+                    <option value="Frontend Developer">Frontend Developer</option>
+                    <option value="Backend Developer">Backend Developer</option>
+                    <option value="Data Analyst">Data Analyst</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Upload Container */}
+              <div className="mb-5">
+                <div className="upload-box mb-3" style={{ width: "100%", maxWidth: "100%", padding: "32px 20px" }}>
+                  <input
+                    type="file"
+                    id="fileUpload"
+                    hidden
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      if (e.target.files) setFile(e.target.files[0]);
+                    }}
+                  />
+                  <label htmlFor="fileUpload" className="upload-label" style={{ cursor: "pointer", display: "block", wordBreak: "break-all", fontSize: "var(--font-size-base)" }}>
+                    📄 {file ? <strong style={{ color: "#a5b4fc" }}>{file.name}</strong> : "Drag & Drop Resume or Click to Browse"}
+                  </label>
+                </div>
+                
+                {/* Action Buttons */}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", justifyContent: "center", alignItems: "center" }} className="action-buttons">
+                  <button
+                    className="analyze-btn"
+                    onClick={uploadResume}
+                    disabled={loading}
+                    style={{ minHeight: "44px", flex: "1 1 200px", maxWidth: "100%" }}
+                  >
+                    {loading && analysisSource === "upload" ? "⏳ Extracting..." : "🚀 Analyze Resume"}
+                  </button>
+                  
+                  <button
+                    className="secondary-btn"
+                    onClick={handleSampleResume}
+                    disabled={loading}
+                    type="button"
+                    style={{ minHeight: "44px", flex: "1 1 200px", maxWidth: "100%" }}
+                  >
+                    {loading && analysisSource === "sample" ? "⏳ Loading..." : "Try Sample Resume"}
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            {score === null && !loading && (
+              <div className="hero-right">
+                <img src={resultScreenshot} alt="App Preview" className="hero-screenshot" />
+              </div>
+            )}
+          </div>
+
+
+          {/* Loading skeleton — shown while the resume is being analyzed */}
           {loading && <AnalysisSkeleton />}
           {score === null && !loading && <EmptyState />}
 
@@ -564,7 +690,9 @@ function App() {
                 )}
               </div>
 
-              <div className="mt-4 p-3" style={{ background: "rgba(255,255,255,0.05)", borderRadius: "8px" }}>
+
+              {/* Skill gap matrix */}
+              <div className="mt-4 p-3" style={{ background: "rgba(255,255,255,0.05)", borderRadius: "var(--radius-md)" }}>
                 <h4 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', textAlign: 'center' }}>
                   <span>🎯 Skill Gap Matrix ({targetRole})</span>
                   <InfoTooltip content="Shows which required skills are already in your resume and which important skills are missing." />
@@ -593,17 +721,11 @@ function App() {
                 </div>
               </div>
 
-              <div className="mt-5 p-4" style={{ background: "rgba(30, 30, 47, 0.4)", borderRadius: "var(--radius-lg)", border: "1px solid rgba(255, 255, 255, 0.04)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
-                  <div style={{ textAlign: "left" }}>
-                    <h4 style={{ margin: "0 0 4px 0", fontSize: "var(--font-size-base)", color: "#fff" }}>
-                      💡 Dynamic Profile Optimization Suggestions
-                    </h4>
-                    <p style={{ margin: 0, fontSize: "var(--font-size-sm)", color: "#64748b" }}>
-                      Actionable revisions targeted at elevating scanning compatibility ranks.
-                    </p>
-                  </div>
-                  
+              {/* Upgraded Modern Suggestions Section */}
+              {/* SUGGESTIONS BOX WITH THE UTILITY BUTTON */}
+              <div className="suggestion-box mt-4" style={{ padding: "15px" }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                  <h4 style={{ margin: 0 }}>💡 Suggestions</h4>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
                     {suggestions.length > 0 && (
                       <button
@@ -693,9 +815,58 @@ function App() {
                 </div>
               </div>
             </>
-          )}
-        </div> 
-      </div>
+          )}   {/* closes the conditional block */}
+        </div> {/* closes .main-card */}
+      </div> {/* closes .container */}
+
+      {/* Back to top — appears after scrolling down long result pages */}
+      <button
+        type="button"
+        className={`back-to-top${showBackToTop ? " back-to-top--visible" : ""}`}
+        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        aria-label="Back to top"
+        title="Back to top"
+      >
+        ↑
+      </button>
+
+      <Footer />  {/* footer should be outside main container */}
+
+      {/* Floating Keyboard Shortcuts Help Panel Overlay */}
+      <button 
+        className="shortcut-help-trigger" 
+        onClick={() => setShowShortcutHelp(!showShortcutHelp)}
+        title="Toggle Keyboard Shortcuts Help"
+        aria-label="Toggle keyboard shortcuts menu"
+      >
+        ?
+      </button>
+
+      {showShortcutHelp && (
+        <div className="shortcut-overlay-card">
+          <h5 style={{ margin: "0 0 12px 0", color: "#fff", display: "flex", alignItems: "center", gap: "6px" }}>
+            ⌨️ Keyboard Quick Actions
+          </h5>
+          <div className="shortcut-row">
+            <span style={{ color: "#94a3b8" }}>Upload Resume</span>
+            <span className="shortcut-key-badge">Alt + U</span>
+          </div>
+          <div className="shortcut-row">
+            <span style={{ color: "#94a3b8" }}>Reset Analysis</span>
+            <span className="shortcut-key-badge">Alt + R</span>
+          </div>
+          <div className="shortcut-row">
+            <span style={{ color: "#94a3b8" }}>Close Modals / Sidebar</span>
+            <span className="shortcut-key-badge">Esc</span>
+          </div>
+          <p style={{ margin: "12px 0 0 0", fontSize: "11px", color: "#64748b", fontStyle: "italic" }}>
+            Press <kbd style={{ color: "#a5b4fc" }}>Esc</kbd> at any point to clear this helper overlay panel frame views.
+          </p>
+        </div>
+      )}
+    </>
+  ); 
+}
 
       <Footer /> 
 
@@ -730,5 +901,4 @@ function App() {
     </>
   ); 
 }
-
 export default App;
