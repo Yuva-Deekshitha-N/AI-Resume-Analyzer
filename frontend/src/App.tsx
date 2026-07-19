@@ -9,6 +9,7 @@ import { AuthModal } from "./AuthModal";
 import { Footer } from "./Footer";
 import AnalysisSkeleton from "./components/AnalysisSkeleton/AnalysisSkeleton";
 import { InfoTooltip } from "./components/InfoTooltip";
+import { SkillWordCloud } from "./components/SkillWordCloud";
 import {
   Moon, Sun, User, Lock, FileText, Rocket, Loader2,
   CheckCircle, ChevronDown, ChevronUp, Clipboard, ClipboardCheck,
@@ -441,6 +442,9 @@ function App() {
                   </button>
                 )}
               </div>
+
+              {/* Word Cloud */}
+              <SkillWordCloud skills={skills} />
 
               {/* Skill Gap Matrix */}
               <div className="mt-4 p-3" style={{ background: "rgba(255,255,255,0.05)", borderRadius: "8px" }}>
