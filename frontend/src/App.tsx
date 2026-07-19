@@ -12,6 +12,7 @@ import { InfoTooltip } from "./components/InfoTooltip";
 import { Navbar } from "./components/Navbar";
 import EmptyState from "./components/EmptyState";
 import { OnboardingTour } from "./components/OnboardingTour";
+import { HowItWorks } from "./components/HowItWorks";
 
 type Theme = "light" | "dark";
 
@@ -32,10 +33,8 @@ function highlightSkills(text: string, skills: string[]): React.ReactNode[] {
   if (!text) return [];
   if (skills.length === 0) return [text];
 
-  // Sort longest first so multi-word skills (e.g. "machine learning") match before shorter ones
   const sorted = [...skills].sort((a, b) => b.length - a.length);
   const escaped = sorted.map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  // \b works for alphanumeric boundaries; for symbols like c++ we use lookahead/lookbehind
   const pattern = new RegExp(`(?<![\\w])(${escaped.join('|')})(?![\\w])`, 'gi');
   const parts = text.split(pattern);
   const skillSet = new Set(skills.map(s => s.toLowerCase()));
@@ -116,17 +115,16 @@ function App() {
   const [copied, setCopied] = useState(false);
   const [analysisSource, setAnalysisSource] = useState<"sample" | "upload" | null>(null);
   const [resumeText, setResumeText] = useState<string>("");
+  const [activeFileName, setActiveFileName] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(false);
 
-  // Auth
+  // Auth & History
   const { user, signup, login, logout } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
-
-  // History
   const { entries, addEntry, deleteEntry, clearHistory, setEntries } = useAnalysisHistory();
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [activeFileName, setActiveFileName] = useState("");
 
   const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000";
+
   const handleDeleteEntry = async (id: string) => {
     if (user) {
       try {
@@ -152,16 +150,13 @@ function App() {
     }
     clearHistory();
   };
+
   const fetchDbHistory = useCallback(async (token: string) => {
     try {
       const res = await axios.get(`${backendUrl}/api/history/`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const dbEntries: AnalysisEntry[] = res.data.map((item: {
-        id: number; file_name: string; score: number; skills_found: string[];
-        suggestions: string[]; matched_skills: string[]; missing_skills: string[];
-        target_role: string; created_at: string;
-      }) => ({
+      const dbEntries: AnalysisEntry[] = res.data.map((item: any) => ({
         id: String(item.id),
         timestamp: new Date(item.created_at).getTime(),
         score: item.score,
@@ -189,34 +184,17 @@ function App() {
     document.documentElement.setAttribute("data-theme", theme);
     try {
       localStorage.setItem("theme", theme);
-    } catch {
-      // persistence is best-effort; ignore if storage is unavailable
-    }
+    } catch {}
   }, [theme]);
   
   useEffect(() => {
-    const handleScroll = () => {
-      if (window.scrollY > 400) {
-        setShowBackToTop(true);
-      } else {
-        setShowBackToTop(false);
-      }
-    };
-
+    const handleScroll = () => setShowBackToTop(window.scrollY > 400);
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === "light" ? "dark" : "light"));
-  };
-  
-  const scrollToTop = () => {
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
-  };
+  const toggleTheme = () => setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
 
   const runAnalysis = async (fileToAnalyze: File, source: "sample" | "upload") => {
     try {
@@ -226,7 +204,6 @@ function App() {
       formData.append("file", fileToAnalyze);
       formData.append("role", targetRole);
 
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000";
       const headers = user ? { Authorization: `Bearer ${user.token}` } : {};
       const res = await axios.post(`${backendUrl}/api/upload/`, formData, { headers });
 
@@ -242,8 +219,7 @@ function App() {
 
       if (user) {
         await fetchDbHistory(user.token);
-      }
-      else {
+      } else {
         addEntry({
           score: res.data.score,
           skills: res.data.skills_found || [],
@@ -254,34 +230,16 @@ function App() {
           fileName: fileToAnalyze.name,
         });
       }
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error(error);
-
-      let errorMsg = "Unknown error";
-
-      if (axios.isAxiosError(error)) {
-        errorMsg =
-          error.response?.data?.error ??
-          error.message;
-      } else if (error instanceof Error) {
-        errorMsg = error.message;
-      }
-
-      alert(
-        source === "sample"
-          ? `Sample analysis failed: ${errorMsg}`
-          : `Upload failed: ${errorMsg}`
-      );
-
+      const errorMsg = error.response?.data?.error ?? error.message ?? "Unknown error";
+      alert(source === "sample" ? `Sample analysis failed: ${errorMsg}` : `Upload failed: ${errorMsg}`);
       setLoading(false);
     }
   };
 
   const uploadResume = async () => {
-    if (!file) {
-      alert("Please upload resume");
-      return;
-    }
+    if (!file) return alert("Please upload resume");
     await runAnalysis(file, "upload");
   };
 
@@ -289,25 +247,13 @@ function App() {
     try {
       setLoading(true);
       setAnalysisSource("sample");
-
       const response = await fetch("/sample-resume.pdf");
-
-      if (!response.ok) {
-        throw new Error("Failed to load sample resume PDF");
-      }
-
+      if (!response.ok) throw new Error("Failed to load sample resume PDF");
       const blob = await response.blob();
-
-      const sampleFile = new File(
-        [blob],
-        "sample-resume.pdf",
-        { type: "application/pdf" }
-      );
-
+      const sampleFile = new File([blob], "sample-resume.pdf", { type: "application/pdf" });
       await runAnalysis(sampleFile, "sample");
-
       setActiveFileName(sampleFile.name);
-    } catch (error: unknown) {
+    } catch (error) {
       console.error(error);
       alert("Could not load sample resume");
       setLoading(false);
@@ -387,13 +333,10 @@ function App() {
   };
 
   const handleLogout = () => {
-    logout();           
+    logout();            
     clearHistory();
   };
 
-    logout();          
-    clearHistory();
-  };
   return (
     <>
       <OnboardingTour />
@@ -416,7 +359,7 @@ function App() {
         onHistoryClick={() => setHistoryOpen(true)}
       />
 
-      <div className="container mt-5 px-3"> {/* Added padding safety track */}
+      <div className="container mt-5 px-3">
         <div className="main-card text-center mx-auto" style={{ width: "100%", maxWidth: "600px" }}>
 
           {showAuthModal && (
@@ -426,146 +369,112 @@ function App() {
               onClose={() => setShowAuthModal(false)}
             />
           )}
-          <h1 className="mb-4">🚀 AI Resume Analyzer</h1>
+          
+          <h1 className="mb-4 app-main-title" style={{ fontSize: "calc(1.5rem + 1.5vw)", wordBreak: "break-word" }}>
+            🚀 AI Resume Analyzer
+          </h1>
 
           {/* STEP 1: Role Selector Container */}
-          <div className="mb-5 p-3" style={{ background: "rgba(255, 255, 255, 0.02)", borderRadius: "var(--radius-md)", border: "1px solid rgba(255,255,255,0.05)" }}>
-            <label htmlFor="roleSelect" style={{ display: "block", marginBottom: "8px", fontWeight: "600", color: "#e2e8f0", fontSize: "var(--font-size-sm)" }}>
-              1️⃣ Choose your Target Career Track
-
-          <h1 className="mb-4">🚀 AI Resume Analyzer</h1>
-
-          {/* Role Selector Container */}
           <div className="mb-5 p-4" style={{ background: "rgba(255, 255, 255, 0.02)", borderRadius: "var(--radius-lg)", border: "1px solid rgba(255,255,255,0.04)" }}>
-            <label 
-              htmlFor="roleSelect" 
-              style={{ display: "block", marginBottom: "12px", fontWeight: "600", color: "#e2e8f0", fontSize: "var(--font-size-sm)" }}
-<h1 className="mb-4 app-main-title" style={{ fontSize: "calc(1.5rem + 1.5vw)", wordBreak: "break-word" }}>🚀 AI Resume Analyzer</h1>
-          {/* Role Selector Dropdown */}
-          <div className="mb-4 d-flex flex-column align-items-center flex-sm-row justify-content-center role-selector-container" style={{ gap: "8px" }}>
-            <label htmlFor="roleSelect" className="role-select-label" style={{ fontWeight: "600" }}>
-              Target Career Track:
+            <label htmlFor="roleSelect" style={{ display: "block", marginBottom: "12px", fontWeight: "600", color: "#e2e8f0", fontSize: "var(--font-size-sm)" }}>
+              1️⃣ Choose your Target Career Track
             </label>
-            <select
-              id="roleSelect"
-              className="role-select-dropdown"
-              value={targetRole}
-              onChange={(e) => setTargetRole(e.target.value)}
-
-              style={{ padding: "10px 16px", borderRadius: "var(--radius-sm)", border: "1px solid rgba(255,255,255,0.15)", width: "100%", maxWidth: "320px", background: "#1e1e2f", color: "#fff", fontSize: "var(--font-size-sm)" }}
-
-              style={{ padding: "6px 12px", borderRadius: "6px", width: "100%", maxWidth: "250px" }}
-            >
-              🎯 Target Career Track
-            </label>
-            <div className="custom-select-container">
-              <select
-                id="roleSelect"
-                value={targetRole}
-                onChange={(e) => setTargetRole(e.target.value)}
-                className="custom-select-element"
-              >
-                <option value="Frontend Developer">Frontend Developer</option>
-                <option value="Backend Developer">Backend Developer</option>
-                <option value="Data Analyst">Data Analyst</option>
-              </select>
+            <div className="mb-4 d-flex flex-column align-items-center flex-sm-row justify-content-center role-selector-container" style={{ gap: "8px" }}>
+              <div className="custom-select-container" style={{ width: "100%", maxWidth: "320px" }}>
+                <select
+                  id="roleSelect"
+                  value={targetRole}
+                  onChange={(e) => setTargetRole(e.target.value)}
+                  className="custom-select-element role-select-dropdown"
+                  style={{ padding: "10px 16px", borderRadius: "var(--radius-sm)", border: "1px solid rgba(255,255,255,0.15)", width: "100%", background: "#1e1e2f", color: "#fff", fontSize: "var(--font-size-sm)" }}
+                >
+                  <option value="Frontend Developer">Frontend Developer</option>
+                  <option value="Backend Developer">Backend Developer</option>
+                  <option value="Data Analyst">Data Analyst</option>
+                </select>
+              </div>
             </div>
-          </div>
 
-          {/* STEP 2: Enhanced Upload Container */}
-          <div className="mb-5">
-            <span style={{ display: "block", marginBottom: "12px", fontWeight: "600", color: "#e2e8f0", fontSize: "var(--font-size-sm)" }}>
-              2️⃣ Upload your Document
-            </span>
-            <div className="upload-box mb-3" style={{ padding: "32px 20px", border: "2px dashed var(--upload-border)", borderRadius: "var(--radius-lg)", background: "var(--upload-bg)", transition: "all 0.3s ease" }}>
-              <input
-                type="file"
-                id="fileUpload"
-                hidden
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                  if (e.target.files) setFile(e.target.files[0]);
+            {/* STEP 2: Enhanced Upload Container */}
+            <div className="mb-4">
+              <span style={{ display: "block", marginBottom: "12px", fontWeight: "600", color: "#e2e8f0", fontSize: "var(--font-size-sm)" }}>
+                2️⃣ Upload your Document
+              </span>
+              <div className="upload-box mb-3" style={{ padding: "32px 20px", border: "2px dashed var(--upload-border)", borderRadius: "var(--radius-lg)", background: "var(--upload-bg)", transition: "all 0.3s ease" }}>
+                <input
+                  type="file"
+                  id="fileUpload"
+                  hidden
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    if (e.target.files) setFile(e.target.files[0]);
+                  }}
+                />
+                <label htmlFor="fileUpload" className="upload-label" style={{ cursor: "pointer", display: "block", fontSize: "var(--font-size-base)", wordBreak: "break-all" }}>
+                  📄 {file ? <strong style={{ color: "#a5b4fc" }}>{file.name}</strong> : "Drag & Drop Resume or Click to Browse"}
+                </label>
+              </div>
+            </div>
+
+            {/* STEP 3: Prominent Call to Action Buttons */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", justifyContent: "center", alignItems: "center" }} className="mb-3">
+              <button
+                className="analyze-btn"
+                onClick={uploadResume}
+                disabled={loading}
+                style={{
+                  padding: "12px 36px",
+                  fontSize: "var(--font-size-base)",
+                  fontWeight: "700",
+                  letterSpacing: "0.5px",
+                  backgroundColor: "#6366f1",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "var(--radius-md)",
+                  cursor: "pointer",
+                  boxShadow: "var(--shadow-card)",
+                  transition: "transform 0.2s ease, background-color 0.2s ease",
+                  width: "100%",
+                  maxWidth: "280px",
+                  minHeight: "44px", 
+                  flex: "1 1 200px"
                 }}
-              />
-              <label htmlFor="fileUpload" className="upload-label" style={{ cursor: "pointer", display: "block", fontSize: "var(--font-size-base)" }}>
-                📄 {file ? <strong style={{ color: "#a5b4fc" }}>{file.name}</strong> : "Drag & Drop Resume or Click to Browse"}
-              </label>
+              >
+                {loading && analysisSource === "upload" ? "⏳ Processing..." : "🚀 Analyze Resume"}
+              </button>
+              
+              <button
+                className="secondary-btn"
+                onClick={handleSampleResume}
+                disabled={loading}
+                type="button"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--btn-secondary-text)",
+                  fontSize: "var(--font-size-sm)",
+                  textDecoration: "underline",
+                  cursor: "pointer",
+                  marginTop: "4px",
+                  minHeight: "44px", 
+                  flex: "1 1 200px", 
+                  maxWidth: "100%"
+                }}
+              >
+                {loading && analysisSource === "sample" ? "⏳ Loading..." : "Or try with a sample resume"}
+              </button>
             </div>
           </div>
-
-          {/* STEP 3: Prominent Call to Action Buttons */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px", alignItems: "center", marginTop: "24px" }} className="mb-4">
-          <div className="upload-box mb-3" style={{ width: "100%", maxWidth: "100%" }}>
-            <input
-              type="file"
-              id="fileUpload"
-              hidden
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                if (e.target.files) setFile(e.target.files[0]);
-              }}
-            />
-            <label htmlFor="fileUpload" className="upload-label" style={{ display: "block", wordBreak: "break-all", padding: "15px" }}>
-              📄 {file ? file.name : "Drag & Drop Resume or Click to Upload"}
-            </label>
-          </div>
-
-
-          {/* FIXED: Added responsive flex-wrap and set width boundaries for smaller screens */}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", justifyContent: "center", alignItems: "center" }} className="mb-3">
-            <button
-              className="analyze-btn"
-              onClick={uploadResume}
-              disabled={loading}
-              
-              style={{
-                padding: "12px 36px",
-                fontSize: "var(--font-size-base)",
-                fontWeight: "700",
-                letterSpacing: "0.5px",
-                backgroundColor: "#6366f1",
-                color: "#fff",
-                border: "none",
-                borderRadius: "var(--radius-md)",
-                cursor: "pointer",
-                boxShadow: "var(--shadow-card)",
-                transition: "transform 0.2s ease, background-color 0.2s ease",
-                width: "100%",
-                maxWidth: "280px"
-              }}
-            >
-              {loading && analysisSource === "upload" ? "⏳ Processing..." : "🚀 Analyze Resume"}
-              style={{ minHeight: "44px", flex: "1 1 200px", maxWidth: "100%" }}
-            >
-              {loading && analysisSource === "upload" ? "⏳ Extracting..." : "🚀 Analyze Resume"}
-            </button>
-            
-            <button
-              className="secondary-btn"
-              onClick={handleSampleResume}
-              disabled={loading}
-              type="button"
-              
-              style={{
-                background: "transparent",
-                border: "none",
-                color: "var(--btn-secondary-text)",
-                fontSize: "var(--font-size-sm)",
-                textDecoration: "underline",
-                cursor: "pointer",
-                marginTop: "4px"
-              }}
-            >
-              {loading && analysisSource === "sample" ? "⏳ Loading..." : "Or try with a sample resume"}
-              style={{ minHeight: "44px", flex: "1 1 200px", maxWidth: "100%" }}
-            >
-              {loading && analysisSource === "sample" ? "⏳ Loading..." : "Try Sample Resume"}
-            </button>
-          </div>
-
-          {/* Loading skeleton — shown while the resume is being analyzed */}
+          {/* Loading skeleton */}
           {loading && <AnalysisSkeleton />}
           {score === null && !loading && (
-  <EmptyState />
-)}
+            <div style={{ paddingBottom: "2rem" }}>
+              <EmptyState />
+              
+              <div className="mt-4">
+                <HowItWorks />
+              </div>
+            </div>
+          )}
 
           {/* Results */}
           {score !== null && (
@@ -587,11 +496,7 @@ function App() {
 
               <h5 className="analysis-done mt-3">✅ Resume Analysis Complete</h5>
               {activeFileName && (
-
-                <p style={{ fontSize: "var(--font-size-sm)", opacity: 0.7, marginTop: "-8px" }}>📄 {activeFileName}</p>
-
                 <p style={{ fontSize: "13px", opacity: 0.7, marginTop: "-8px", wordBreak: "break-all" }}>📄 {activeFileName}</p>
-
               )}
 
               {/* Skills container */}
@@ -615,17 +520,10 @@ function App() {
                 )}
               </div>
 
-
               {/* Skill gap matrix */}
-              <div className="mt-4 p-3" style={{ background: "rgba(255,255,255,0.05)", borderRadius: "var(--radius-md)" }}>
-                <h4 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  🎯 Skill Gap Matrix ({targetRole})
-
-              {/* FIXED: Changed matrix container style to use flex-wrap / grid adaptation for mobile widths */}
               <div className="mt-4 p-3" style={{ background: "rgba(255,255,255,0.05)", borderRadius: "8px" }}>
                 <h4 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', textAlign: 'center' }}>
                   <span>🎯 Skill Gap Matrix ({targetRole})</span>
-
                   <InfoTooltip content="Shows which required skills are already in your resume and which important skills are missing." />
                 </h4>
                 <div className="skill-gap-layout" style={{ display: "flex", flexWrap: "wrap", gap: "20px", justifyContent: "space-around", marginTop: "12px" }}>
@@ -652,40 +550,26 @@ function App() {
                 </div>
               </div>
 
-              {/* Upgraded Modern Suggestions Section */}
+              {/* Suggestions Section */}
               <div className="mt-5 p-4" style={{ background: "rgba(30, 30, 47, 0.4)", borderRadius: "var(--radius-lg)", border: "1px solid rgba(255, 255, 255, 0.04)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
                   <div style={{ textAlign: "left" }}>
                     <h4 style={{ margin: "0 0 4px 0", fontSize: "var(--font-size-base)", color: "#fff" }}>
-                      💡 Dynamic Profile Optimization Suggestions
+                      💡 Dynamic Profile Optimization
                     </h4>
                     <p style={{ margin: 0, fontSize: "var(--font-size-sm)", color: "#64748b" }}>
                       Actionable revisions targeted at elevating scanning compatibility ranks.
                     </p>
                   </div>
-                  {suggestions.length > 0 && (
-                    <button
-                      type="button"
-                      className={`app-btn app-btn--accent${copied ? " is-success" : ""}`}
-                      onClick={copySuggestionsToClipboard}
-                      style={{ padding: "8px 16px", fontSize: "13px" }}
-                    >
-                      {copied ? "✅ Copied!" : "📋 Copy All"}
-                    </button>
-                  )}
-              {/* SUGGESTIONS BOX WITH THE UTILITY BUTTON */}
-              <div className="suggestion-box mt-4" style={{ padding: "15px" }}>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                  <h4 style={{ margin: 0 }}>💡 Suggestions</h4>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
                     {suggestions.length > 0 && (
                       <button
                         type="button"
                         className={`app-btn app-btn--accent${copied ? " is-success" : ""}`}
                         onClick={copySuggestionsToClipboard}
-                        style={{ minHeight: "44px" }}
+                        style={{ padding: "8px 16px", fontSize: "13px", minHeight: "44px" }}
                       >
-                        {copied ? "✅ Copied!" : "📋 Copy Suggestions"}
+                        {copied ? "✅ Copied!" : "📋 Copy All"}
                       </button>
                     )}
                     
@@ -700,19 +584,11 @@ function App() {
                       </button>
                       {showExportDropdown && (
                         <div style={{
-                          position: "absolute",
-                          top: "100%",
-                          right: 0,
-                          marginTop: "4px",
+                          position: "absolute", top: "100%", right: 0, marginTop: "4px",
                           backgroundColor: theme === "dark" ? "#1f2937" : "#ffffff",
                           border: `1px solid ${theme === "dark" ? "#374151" : "#e5e7eb"}`,
-                          borderRadius: "6px",
-                          boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-                          zIndex: 10,
-                          display: "flex",
-                          flexDirection: "column",
-                          minWidth: "120px",
-                          overflow: "hidden"
+                          borderRadius: "6px", boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+                          zIndex: 10, display: "flex", flexDirection: "column", minWidth: "120px", overflow: "hidden"
                         }}>
                           <button
                             type="button"
@@ -737,7 +613,6 @@ function App() {
                     </div>
                   </div>
                 </div>
-                
 
                 {suggestions.length === 0 ? (
                   <p style={{ color: "#64748b", fontStyle: "italic", fontSize: "var(--font-size-sm)", textAlign: "left", margin: "16px 0 0 0" }}>
@@ -746,17 +621,10 @@ function App() {
                 ) : (
                   <div className="suggestions-grid">
                     {suggestions.map((suggestion, index) => (
-                      <SuggestionCard 
-                        key={index} 
-                        text={suggestion} 
-                        index={index} 
-                      />
+                      <SuggestionCard key={index} text={suggestion} index={index} />
                     ))}
                   </div>
                 )}
-                {suggestions.map((s: string, i: number) => (
-                  <div key={i} className="suggestion-item" style={{ wordBreak: "break-word", textAlign: "left" }}>📌 {s}</div>
-                ))}
 
                 {/* Reset Button */}
                 <div style={{ marginTop: "24px", textAlign: "center" }}>
@@ -771,38 +639,21 @@ function App() {
                 </div>
               </div>
             </>
-          )}   {/* closes the conditional block */}
-        </div> {/* closes .main-card */}
-      </div> {/* closes .container */}
+          )}
+        </div>
+      </div>
 
-      <Footer />  {/* footer should be outside main container */}
-
-    </>
-  ); 
-}
-
+      <Footer />
 
       {/* RENDER FLOATING BACK TO TOP BUTTON */}
       {showBackToTop && (
         <button
           onClick={scrollToTop}
           style={{
-            position: "fixed",
-            bottom: "30px",
-            right: "30px",
-            backgroundColor: "#6366f1",
-            color: "#fff",
-            border: "none",
-            borderRadius: "50%",
-            width: "50px",
-            height: "50px",
-            fontSize: "20px",
-            cursor: "pointer",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-            zIndex: 1000,
-            transition: "all 0.3s ease",
-            display: "flex",
-            alignItems: "center",
+            position: "fixed", bottom: "30px", right: "30px", backgroundColor: "#6366f1",
+            color: "#fff", border: "none", borderRadius: "50%", width: "50px", height: "50px",
+            fontSize: "20px", cursor: "pointer", boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+            zIndex: 1000, transition: "all 0.3s ease", display: "flex", alignItems: "center",
             justifyContent: "center"
           }}
           title="Back to Top"
@@ -812,6 +663,7 @@ function App() {
         </button>
       )}
     </>
-  ); /* closes the return fragment */
-} /* closes App function */
+  );
+}
+
 export default App;
