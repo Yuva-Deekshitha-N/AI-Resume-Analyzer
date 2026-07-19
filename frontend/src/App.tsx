@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import "./index.css";
 import { AtsScore } from "./AtsScore";
@@ -9,11 +9,16 @@ import { AuthModal } from "./AuthModal";
 import { Footer } from "./Footer";
 import AnalysisSkeleton from "./components/AnalysisSkeleton/AnalysisSkeleton";
 import { InfoTooltip } from "./components/InfoTooltip";
+import { SkillWordCloud } from "./components/SkillWordCloud";
 import {
   Moon, Sun, User, Lock, FileText, Rocket, Loader2,
   CheckCircle, ChevronDown, ChevronUp, Clipboard, ClipboardCheck,
   RefreshCw, Lightbulb, Pin, Target, Info
 } from "lucide-react";
+import { Navbar } from "./components/Navbar";
+import EmptyState from "./components/EmptyState";
+import resultScreenshot from "./assets/screenshots/result.png";
+import { OnboardingTour } from "./components/OnboardingTour";
 
 type Theme = "light" | "dark";
 
@@ -34,10 +39,8 @@ function highlightSkills(text: string, skills: string[]): React.ReactNode[] {
   if (!text) return [];
   if (skills.length === 0) return [text];
 
-  // Sort longest first so multi-word skills (e.g. "machine learning") match before shorter ones
   const sorted = [...skills].sort((a, b) => b.length - a.length);
   const escaped = sorted.map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  // \b works for alphanumeric boundaries; for symbols like c++ we use lookahead/lookbehind
   const pattern = new RegExp(`(?<![\\w])(${escaped.join('|')})(?![\\w])`, 'gi');
   const parts = text.split(pattern);
   const skillSet = new Set(skills.map(s => s.toLowerCase()));
@@ -61,6 +64,45 @@ function ResumePreview({ text, skills }: { text: string; skills: string[] }) {
   );
 }
 
+interface SuggestionCardProps {
+  text: string;
+  index: number;
+}
+
+const SuggestionCard: React.FC<SuggestionCardProps> = ({ text, index }) => {
+  const [copied, setCopied] = React.useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="suggestion-card">
+      <div>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
+          <span style={{ fontSize: "16px" }}>💡</span>
+          <span style={{ fontSize: "12px", fontWeight: "700", color: "#a5b4fc", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+            Recommendation #{index + 1}
+          </span>
+        </div>
+        <p style={{ margin: 0, fontSize: "var(--font-size-sm)", color: "#e2e8f0", lineHeight: "1.6" }}>
+          {text}
+        </p>
+      </div>
+      
+      <button 
+        onClick={handleCopy} 
+        className="suggestion-copy-btn"
+        aria-label="Copy recommendation text"
+      >
+        {copied ? "✅ Copied" : "📋 Copy Text"}
+      </button>
+    </div>
+  );
+};
+
 function App() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
   const [loading, setLoading] = useState(false);
@@ -68,6 +110,8 @@ function App() {
   const [score, setScore] = useState<number | null>(null);
   const [skills, setSkills] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+
+  const [showShortcutHelp, setShowShortcutHelp] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [showExportDropdown, setShowExportDropdown] = useState(false);
 
@@ -78,6 +122,8 @@ function App() {
   const [showAllSkills, setShowAllSkills] = useState(false);
   const [copied, setCopied] = useState(false);
   const [analysisSource, setAnalysisSource] = useState<"sample" | "upload" | null>(null);
+  const [jobDesc, setJobDesc] = useState("");
+  const [showBackToTop, setShowBackToTop] = useState(false);
   const [resumeText, setResumeText] = useState<string>("");
 
   const { user, signup, login, logout } = useAuth();
@@ -88,7 +134,7 @@ function App() {
   const [activeFileName, setActiveFileName] = useState("");
 
   const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000";
-
+  
   const handleDeleteEntry = async (id: string) => {
     if (user) {
       try {
@@ -102,6 +148,10 @@ function App() {
     deleteEntry(id);
   };
 
+  const MAX_CHARS = 2000;
+  const isClose = jobDesc.length >= MAX_CHARS * 0.9;
+  const isOver = jobDesc.length > MAX_CHARS;
+
   const handleClearAll = async () => {
     if (user) {
       try {
@@ -114,16 +164,13 @@ function App() {
     }
     clearHistory();
   };
+
   const fetchDbHistory = useCallback(async (token: string) => {
     try {
       const res = await axios.get(`${backendUrl}/api/history/`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const dbEntries: AnalysisEntry[] = res.data.map((item: {
-        id: number; file_name: string; score: number; skills_found: string[];
-        suggestions: string[]; matched_skills: string[]; missing_skills: string[];
-        target_role: string; created_at: string;
-      }) => ({
+      const dbEntries: AnalysisEntry[] = res.data.map((item: any) => ({
         id: String(item.id),
         timestamp: new Date(item.created_at).getTime(),
         score: item.score,
@@ -169,6 +216,44 @@ function App() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // Global Keyboard Shortcut Action Router
+  useEffect(() => {
+    const handleGlobalKeyDown = (event: KeyboardEvent) => {
+      // Using Alt key universally to avoid layout and browser conflicts
+      const modifier = event.altKey; 
+
+      // 1. Trigger Upload File Picker: Alt + U
+      if (modifier && event.key.toLowerCase() === 'u') {
+        event.preventDefault();
+        document.getElementById('fileUpload')?.click();
+      }
+
+      // 2. Trigger Clear/Reset Analysis Matrix: Alt + R
+      if (modifier && event.key.toLowerCase() === 'r') {
+        event.preventDefault();
+        resetAnalysis();
+      }
+
+      // 3. Close Active Modals/Panels: Escape
+      if (event.key === 'Escape') {
+        setShowAuthModal(false);
+        setHistoryOpen(false);
+        setShowShortcutHelp(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
+
+  // Reveal the "Back to top" button once the page is scrolled down
+  useEffect(() => {
+    const onScroll = () => setShowBackToTop(window.scrollY > 300);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   const toggleTheme = () => {
     setTheme((prev) => (prev === "light" ? "dark" : "light"));
   };
@@ -187,8 +272,8 @@ function App() {
       const formData = new FormData();
       formData.append("file", fileToAnalyze);
       formData.append("role", targetRole);
-
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000";
+      formData.append('job_description', jobDesc);
+      
       const headers = user ? { Authorization: `Bearer ${user.token}` } : {};
       const res = await axios.post(`${backendUrl}/api/upload/`, formData, { headers });
 
@@ -204,8 +289,7 @@ function App() {
 
       if (user) {
         await fetchDbHistory(user.token);
-      }
-      else {
+      } else {
         addEntry({
           score: res.data.score,
           skills: res.data.skills_found || [],
@@ -216,25 +300,15 @@ function App() {
           fileName: fileToAnalyze.name,
         });
       }
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error(error);
-
       let errorMsg = "Unknown error";
-
       if (axios.isAxiosError(error)) {
-        errorMsg =
-          error.response?.data?.error ??
-          error.message;
+        errorMsg = error.response?.data?.error ?? error.message;
       } else if (error instanceof Error) {
         errorMsg = error.message;
       }
-
-      alert(
-        source === "sample"
-          ? `Sample analysis failed: ${errorMsg}`
-          : `Upload failed: ${errorMsg}`
-      );
-
+      alert(source === "sample" ? `Sample analysis failed: ${errorMsg}` : `Upload failed: ${errorMsg}`);
       setLoading(false);
     }
   };
@@ -251,25 +325,15 @@ function App() {
     try {
       setLoading(true);
       setAnalysisSource("sample");
-
       const response = await fetch("/sample-resume.pdf");
-
       if (!response.ok) {
         throw new Error("Failed to load sample resume PDF");
       }
-
       const blob = await response.blob();
-
-      const sampleFile = new File(
-        [blob],
-        "sample-resume.pdf",
-        { type: "application/pdf" }
-      );
-
+      const sampleFile = new File([blob], "sample-resume.pdf", { type: "application/pdf" });
       await runAnalysis(sampleFile, "sample");
-
       setActiveFileName(sampleFile.name);
-    } catch (error: unknown) {
+    } catch (error: any) {
       console.error(error);
       alert("Could not load sample resume");
       setLoading(false);
@@ -347,12 +411,15 @@ function App() {
     setHistoryOpen(false);
     setShowExportDropdown(false);
   };
+
   const handleLogout = () => {
-    logout();
+    logout();            
     clearHistory();
   };
+
   return (
     <>
+      <OnboardingTour />
       <HistorySidebar
         entries={entries}
         activeFileName={activeFileName}
@@ -363,30 +430,17 @@ function App() {
         onToggle={() => setHistoryOpen((v) => !v)}
       />
 
-      <div className="container mt-5 px-3"> {/* Added padding safety track */}
-        <div className="main-card text-center mx-auto" style={{ width: "100%", maxWidth: "600px" }}>
-          {/* Theme toggle */}
-          <button
-            type="button"
-            className="app-btn theme-toggle-btn"
-            onClick={toggleTheme}
-            aria-label="Toggle theme"
-            aria-pressed={theme === "dark"}
-          >
-            {theme === "light" ? <><Moon size={15} /> Dark Mode</> : <><Sun size={15} /> Light Mode</>}
-          </button>
+      <Navbar
+        theme={theme}
+        toggleTheme={toggleTheme}
+        user={user}
+        onLogin={() => setShowAuthModal(true)}
+        onLogout={handleLogout}
+        onHistoryClick={() => setHistoryOpen(true)}
+      />
 
-          {/* Auth bar */}
-          <div className="auth-bar">
-            {user ? (
-              <>
-                <span className="auth-username"><User size={14} /> {user.username}</span>
-                <button className="auth-bar-btn" onClick={handleLogout}>Logout</button>
-              </>
-            ) : (
-              <button className="auth-bar-btn" onClick={() => setShowAuthModal(true)}><Lock size={14} /> Login / Sign Up</button>
-            )}
-          </div>
+      <div className="container mt-5 px-3"> {/* Added padding safety track */}
+        <div className="main-card text-center mx-auto" style={{ width: "100%", maxWidth: score === null && !loading ? "1100px" : "600px" }}>
 
           {showAuthModal && (
             <AuthModal
@@ -395,61 +449,118 @@ function App() {
               onClose={() => setShowAuthModal(false)}
             />
           )}
-
-          <h1 className="mb-4" style={{ fontSize: "calc(1.5rem + 1.5vw)", wordBreak: "break-word" }}>
-            <Rocket size={28} /> AI Resume Analyzer
+          
+          <h1 className="mb-4 app-main-title" style={{ fontSize: "calc(1.5rem + 1.5vw)", wordBreak: "break-word" }}>
+            🚀 AI Resume Analyzer
           </h1>
 
-          {/* Role Selector Dropdown */}
-          <div className="mb-4 d-flex flex-column align-items-center flex-sm-row justify-content-center" style={{ gap: "8px" }}>
-            <label htmlFor="roleSelect" style={{ fontWeight: "600", color: "#fff" }}>
-              Target Career Track:
+          {/* STEP 1: Role Selector Container */}
+          <div className="mb-5 p-4" style={{ background: "rgba(255, 255, 255, 0.02)", borderRadius: "var(--radius-lg)", border: "1px solid rgba(255,255,255,0.04)" }}>
+            <label htmlFor="roleSelect" style={{ display: "block", marginBottom: "12px", fontWeight: "600", color: "#e2e8f0", fontSize: "var(--font-size-sm)" }}>
+              1️⃣ Choose your Target Career Track
             </label>
-            <select
-              id="roleSelect"
-              value={targetRole}
-              onChange={(e) => setTargetRole(e.target.value)}
-              style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #ccc", width: "100%", maxWidth: "250px" }}
-            >
-              <option value="Frontend Developer">Frontend Developer</option>
-              <option value="Backend Developer">Backend Developer</option>
-              <option value="Data Analyst">Data Analyst</option>
-            </select>
+            <div className="custom-select-container" style={{ display: "flex", justifyContent: "center" }}>
+              <select
+                id="roleSelect"
+                value={targetRole}
+                onChange={(e) => setTargetRole(e.target.value)}
+                className="custom-select-element role-select-dropdown"
+                style={{ padding: "10px 16px", borderRadius: "var(--radius-sm)", border: "1px solid rgba(255,255,255,0.15)", width: "100%", maxWidth: "320px", background: "#1e1e2f", color: "#fff", fontSize: "var(--font-size-sm)" }}
+              >
+                <option value="Frontend Developer">Frontend Developer</option>
+                <option value="Backend Developer">Backend Developer</option>
+                <option value="Data Analyst">Data Analyst</option>
+              </select>
+            </div>
           </div>
 
-          <div className="upload-box mb-3" style={{ width: "100%", maxWidth: "100%" }}>
-            <input
-              type="file"
-              id="fileUpload"
-              hidden
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                if (e.target.files) setFile(e.target.files[0]);
-              }}
-            />
-            <label htmlFor="fileUpload" className="upload-label" style={{ display: "block", wordBreak: "break-all", padding: "15px" }}>
-              <FileText size={16} /> {file ? file.name : "Drag & Drop Resume or Click to Upload"}
-            </label>
+          {/* STEP 2: Upload Container */}
+          <div className="mb-5">
+            <span style={{ display: "block", marginBottom: "12px", fontWeight: "600", color: "#e2e8f0", fontSize: "var(--font-size-sm)" }}>
+              2️⃣ Upload your Document & Job Details
+            </span>
+            <div className="upload-box mb-4" style={{ padding: "32px 20px", border: "2px dashed var(--upload-border)", borderRadius: "var(--radius-lg)", background: "var(--upload-bg)", transition: "all 0.3s ease" }}>
+              <input
+                type="file"
+                id="fileUpload"
+                hidden
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  if (e.target.files) setFile(e.target.files[0]);
+                }}
+              />
+              <label htmlFor="fileUpload" className="upload-label" style={{ cursor: "pointer", display: "block", fontSize: "var(--font-size-base)", wordBreak: "break-all" }}>
+                📄 {file ? <strong style={{ color: "#a5b4fc" }}>{file.name}</strong> : "Drag & Drop Resume or Click to Browse"}
+              </label>
+            </div>
+
+            <div className="mb-4" style={{ textAlign: "left" }}>
+              <label htmlFor="jobDescription" style={{ fontWeight: "600", display: "block", marginBottom: "8px", color: "#e2e8f0" }}>
+                Job Description (Optional)
+              </label>
+              <textarea
+                id="jobDescription"
+                className="custom-textarea"
+                value={jobDesc}
+                onChange={(e) => setJobDesc(e.target.value)}
+                placeholder="Paste the job description here..."
+                style={{ width: '100%', minHeight: '100px', padding: '12px', borderRadius: 'var(--radius-md)', background: 'rgba(255, 255, 255, 0.02)', color: 'inherit', border: '1px solid rgba(255, 255, 255, 0.1)' }}
+              />
+              {/* The Live Counter */}
+              <div style={{ 
+                textAlign: 'right', 
+                color: isOver ? '#ef4444' : (isClose ? '#f97316' : 'inherit'),
+                opacity: isOver || isClose ? 1 : 0.7,
+                fontSize: '0.85rem',
+                marginTop: '5px',
+                fontWeight: isOver ? 'bold' : 'normal'
+              }}>
+                {jobDesc.length} / {MAX_CHARS} characters
+              </div>
+            </div>
           </div>
 
-
-          {/* FIXED: Added responsive flex-wrap and set width boundaries for smaller screens */}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", justifyContent: "center", alignItems: "center" }} className="mb-3">
+          {/* STEP 3: Action Buttons */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", justifyContent: "center", alignItems: "center" }} className="mb-4">
             <button
               className="analyze-btn"
               onClick={uploadResume}
               disabled={loading}
-              style={{ minHeight: "44px", flex: "1 1 200px", maxWidth: "100%" }}
+              style={{
+                padding: "12px 36px",
+                fontSize: "var(--font-size-base)",
+                fontWeight: "700",
+                letterSpacing: "0.5px",
+                backgroundColor: "#6366f1",
+                color: "#fff",
+                border: "none",
+                borderRadius: "var(--radius-md)",
+                cursor: "pointer",
+                boxShadow: "var(--shadow-card)",
+                transition: "transform 0.2s ease, background-color 0.2s ease",
+                flex: "1 1 200px",
+                minHeight: "44px",
+                maxWidth: "280px"
+              }}
             >
-              {loading && analysisSource === "upload"
-                ? <><Loader2 size={15} className="spin" /> Extracting...</>
-                : <><Rocket size={15} /> Analyze Resume</>}
+              {loading && analysisSource === "upload" ? "⏳ Processing..." : "🚀 Analyze Resume"}
             </button>
+            
             <button
               className="secondary-btn"
               onClick={handleSampleResume}
               disabled={loading}
               type="button"
-              style={{ minHeight: "44px", flex: "1 1 200px", maxWidth: "100%" }}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "var(--btn-secondary-text)",
+                fontSize: "var(--font-size-sm)",
+                textDecoration: "underline",
+                cursor: "pointer",
+                minHeight: "44px",
+                flex: "1 1 200px",
+                maxWidth: "280px"
+              }}
             >
               {loading && analysisSource === "sample"
                 ? <><Loader2 size={15} className="spin" /> Loading...</>
@@ -457,8 +568,90 @@ function App() {
             </button>
           </div>
 
+
+          <div className={score === null && !loading ? "hero-container" : ""}>
+            <div className={score === null && !loading ? "hero-left" : ""}>
+              <h1 className="mb-4 app-main-title" style={{ fontSize: "calc(1.5rem + 1.5vw)", wordBreak: "break-word" }}>🚀 AI Resume Analyzer</h1>
+              
+              {score === null && !loading && (
+                <p className="hero-description">
+                  Optimize your resume for Applicant Tracking Systems. Get instant scoring, identify missing skills, and receive actionable recommendations to land your dream job.
+                </p>
+              )}
+
+              {/* Role Selector Container */}
+              <div className="mb-4 p-4 role-selector-container" style={{ background: "rgba(255, 255, 255, 0.02)", borderRadius: "var(--radius-lg)", border: "1px solid rgba(255,255,255,0.04)" }}>
+                <label 
+                  htmlFor="roleSelect" 
+                  style={{ display: "block", marginBottom: "12px", fontWeight: "600", color: "#e2e8f0", fontSize: "var(--font-size-sm)" }}
+                >
+                  🎯 Target Career Track
+                </label>
+                <div className="custom-select-container">
+                  <select
+                    id="roleSelect"
+                    value={targetRole}
+                    onChange={(e) => setTargetRole(e.target.value)}
+                    className="custom-select-element"
+                  >
+                    <option value="Frontend Developer">Frontend Developer</option>
+                    <option value="Backend Developer">Backend Developer</option>
+                    <option value="Data Analyst">Data Analyst</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Upload Container */}
+              <div className="mb-5">
+                <div className="upload-box mb-3" style={{ width: "100%", maxWidth: "100%", padding: "32px 20px" }}>
+                  <input
+                    type="file"
+                    id="fileUpload"
+                    hidden
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      if (e.target.files) setFile(e.target.files[0]);
+                    }}
+                  />
+                  <label htmlFor="fileUpload" className="upload-label" style={{ cursor: "pointer", display: "block", wordBreak: "break-all", fontSize: "var(--font-size-base)" }}>
+                    📄 {file ? <strong style={{ color: "#a5b4fc" }}>{file.name}</strong> : "Drag & Drop Resume or Click to Browse"}
+                  </label>
+                </div>
+                
+                {/* Action Buttons */}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", justifyContent: "center", alignItems: "center" }} className="action-buttons">
+                  <button
+                    className="analyze-btn"
+                    onClick={uploadResume}
+                    disabled={loading}
+                    style={{ minHeight: "44px", flex: "1 1 200px", maxWidth: "100%" }}
+                  >
+                    {loading && analysisSource === "upload" ? "⏳ Extracting..." : "🚀 Analyze Resume"}
+                  </button>
+                  
+                  <button
+                    className="secondary-btn"
+                    onClick={handleSampleResume}
+                    disabled={loading}
+                    type="button"
+                    style={{ minHeight: "44px", flex: "1 1 200px", maxWidth: "100%" }}
+                  >
+                    {loading && analysisSource === "sample" ? "⏳ Loading..." : "Try Sample Resume"}
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            {score === null && !loading && (
+              <div className="hero-right">
+                <img src={resultScreenshot} alt="App Preview" className="hero-screenshot" />
+              </div>
+            )}
+          </div>
+
+
           {/* Loading skeleton — shown while the resume is being analyzed */}
           {loading && <AnalysisSkeleton />}
+          {score === null && !loading && <EmptyState />}
 
           {/* Results */}
           {score !== null && (
@@ -472,7 +665,9 @@ function App() {
                 </div>
               )}
 
-              <AtsScore score={score} />
+              <div id="ats-score">
+                <AtsScore score={score} />
+              </div>
 
               <ResumePreview text={resumeText} skills={skills} />
 
@@ -483,7 +678,6 @@ function App() {
                 </p>
               )}
 
-              {/* Skills container */}
               <div className="mt-4">
                 <h4>Skills Found ({skills.length})</h4>
                 {skills.length === 0 && <p>No skills detected</p>}
@@ -506,10 +700,11 @@ function App() {
                 )}
               </div>
 
-              {/* Skill Gap Matrix */}
-              <div className="mt-4 p-3" style={{ background: "rgba(255,255,255,0.05)", borderRadius: "8px" }}>
-                <h4 style={{ display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap", textAlign: "center", gap: "6px" }}>
-                  <Target size={18} /> Skill Gap Matrix ({targetRole})
+
+              {/* Skill gap matrix */}
+              <div className="mt-4 p-3" style={{ background: "rgba(255,255,255,0.05)", borderRadius: "var(--radius-md)" }}>
+                <h4 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', textAlign: 'center' }}>
+                  <span>🎯 Skill Gap Matrix ({targetRole})</span>
                   <InfoTooltip content="Shows which required skills are already in your resume and which important skills are missing." />
                 </h4>
                 <div className="skill-gap-layout" style={{ display: "flex", flexWrap: "wrap", gap: "20px", justifyContent: "space-around", marginTop: "12px" }}>
@@ -536,32 +731,88 @@ function App() {
                 </div>
               </div>
 
+              {/* Upgraded Modern Suggestions Section */}
               {/* SUGGESTIONS BOX WITH THE UTILITY BUTTON */}
               <div className="suggestion-box mt-4" style={{ padding: "15px" }}>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", justifyContent: "between", alignItems: "center", marginBottom: "12px" }}>
-                  <h4 style={{ margin: 0 }}><Lightbulb size={18} /> Suggestions</h4>
-                  {suggestions.length > 0 && (
-                    <button
-                      type="button"
-                      className={`app-btn app-btn--accent${copied ? " is-success" : ""}`}
-                      onClick={copySuggestionsToClipboard}
-                      style={{ minHeight: "44px" }}
-                    >
-                      {copied
-                        ? <><ClipboardCheck size={15} /> Copied!</>
-                        : <><Clipboard size={15} /> Copy Suggestions</>}
-                    </button>
-                  )}
-                </div>
-                
-
-                {suggestions.map((s: string, i: number) => (
-                  <div key={i} className="suggestion-item" style={{ wordBreak: "break-word", textAlign: "left", display: "flex", alignItems: "flex-start", gap: "6px" }}>
-                    <Pin size={14} style={{ flexShrink: 0, marginTop: "3px" }} />{s}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                  <h4 style={{ margin: 0 }}>💡 Suggestions</h4>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+                    {suggestions.length > 0 && (
+                      <button
+                        type="button"
+                        className={`app-btn app-btn--accent${copied ? " is-success" : ""}`}
+                        onClick={copySuggestionsToClipboard}
+                        style={{ minHeight: "44px", padding: "8px 16px", fontSize: "13px" }}
+                      >
+                        {copied ? "✅ Copied!" : "📋 Copy All"}
+                      </button>
+                    )}
+                    
+                    <div style={{ position: "relative", display: "inline-block" }}>
+                      <button
+                        type="button"
+                        className="app-btn app-btn--secondary"
+                        onClick={() => setShowExportDropdown(!showExportDropdown)}
+                        style={{ minHeight: "44px" }}
+                      >
+                        Export ▼
+                      </button>
+                      {showExportDropdown && (
+                        <div style={{
+                          position: "absolute",
+                          top: "100%",
+                          right: 0,
+                          marginTop: "4px",
+                          backgroundColor: theme === "dark" ? "#1f2937" : "#ffffff",
+                          border: `1px solid ${theme === "dark" ? "#374151" : "#e5e7eb"}`,
+                          borderRadius: "6px",
+                          boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
+                          zIndex: 10,
+                          display: "flex",
+                          flexDirection: "column",
+                          minWidth: "120px",
+                          overflow: "hidden"
+                        }}>
+                          <button
+                            type="button"
+                            onClick={exportJSON}
+                            style={{ padding: "8px 12px", background: "transparent", border: "none", color: theme === "dark" ? "#f3f4f6" : "#111827", textAlign: "left", cursor: "pointer", borderBottom: `1px solid ${theme === "dark" ? "#374151" : "#e5e7eb"}` }}
+                            onMouseOver={(e) => (e.currentTarget.style.backgroundColor = theme === "dark" ? "#374151" : "#f3f4f6")}
+                            onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                          >
+                            Export JSON
+                          </button>
+                          <button
+                            type="button"
+                            onClick={exportCSV}
+                            style={{ padding: "8px 12px", background: "transparent", border: "none", color: theme === "dark" ? "#f3f4f6" : "#111827", textAlign: "left", cursor: "pointer" }}
+                            onMouseOver={(e) => (e.currentTarget.style.backgroundColor = theme === "dark" ? "#374151" : "#f3f4f6")}
+                            onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                          >
+                            Export CSV
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                ))}
+                </div>
 
-                {/* Reset Button */}
+                {suggestions.length === 0 ? (
+                  <p style={{ color: "#64748b", fontStyle: "italic", fontSize: "var(--font-size-sm)", textAlign: "left", margin: "16px 0 0 0" }}>
+                    No actionable layout suggestions generated for the current profile structure matrix.
+                  </p>
+                ) : (
+                  <div className="suggestions-grid">
+                    {suggestions.map((suggestion, index) => (
+                      <SuggestionCard 
+                        key={index} 
+                        text={suggestion} 
+                        index={index} 
+                      />
+                    ))}
+                  </div>
+                )}
+
                 <div style={{ marginTop: "24px", textAlign: "center" }}>
                   <button
                     type="button"
@@ -578,9 +829,57 @@ function App() {
         </div> {/* closes .main-card */}
       </div> {/* closes .container */}
 
+      {/* Back to top — appears after scrolling down long result pages */}
+      <button
+        type="button"
+        className={`back-to-top${showBackToTop ? " back-to-top--visible" : ""}`}
+        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        aria-label="Back to top"
+        title="Back to top"
+      >
+        ↑
+      </button>
+
       <Footer />  {/* footer should be outside main container */}
 
-      {/* RENDER FLOATING BACK TO TOP BUTTON */}
+      {/* Floating Keyboard Shortcuts Help Panel Overlay */}
+      <button 
+        className="shortcut-help-trigger" 
+        onClick={() => setShowShortcutHelp(!showShortcutHelp)}
+        title="Toggle Keyboard Shortcuts Help"
+        aria-label="Toggle keyboard shortcuts menu"
+      >
+        ?
+      </button>
+
+      {showShortcutHelp && (
+        <div className="shortcut-overlay-card">
+          <h5 style={{ margin: "0 0 12px 0", color: "#fff", display: "flex", alignItems: "center", gap: "6px" }}>
+            ⌨️ Keyboard Quick Actions
+          </h5>
+          <div className="shortcut-row">
+            <span style={{ color: "#94a3b8" }}>Upload Resume</span>
+            <span className="shortcut-key-badge">Alt + U</span>
+          </div>
+          <div className="shortcut-row">
+            <span style={{ color: "#94a3b8" }}>Reset Analysis</span>
+            <span className="shortcut-key-badge">Alt + R</span>
+          </div>
+          <div className="shortcut-row">
+            <span style={{ color: "#94a3b8" }}>Close Modals / Sidebar</span>
+            <span className="shortcut-key-badge">Esc</span>
+          </div>
+          <p style={{ margin: "12px 0 0 0", fontSize: "11px", color: "#64748b", fontStyle: "italic" }}>
+            Press <kbd style={{ color: "#a5b4fc" }}>Esc</kbd> at any point to clear this helper overlay panel frame views.
+          </p>
+        </div>
+      )}
+    </>
+  ); 
+}
+
+      <Footer /> 
+
       {showBackToTop && (
         <button
           onClick={scrollToTop}
@@ -610,7 +909,6 @@ function App() {
         </button>
       )}
     </>
-  ); /* closes the return fragment */
-} /* closes App function */
-
+  ); 
+}
 export default App;
